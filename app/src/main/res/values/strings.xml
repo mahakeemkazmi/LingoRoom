@@ -138,6 +138,7 @@
     <string name="error_missing_mic_permissions">Without the microphone permission the voice recognition does not work, go to the settings to grant the permission or reinstall the app</string>
     <string name="error_missing_mic_permissions_walkietalkie">It is not possible to use the WalkieTalkie mode without microphone permission, go to the settings to grant it, or reinstall the app</string>
     <string name="error_tts_toast">Missing tts</string>
+    <string name="error_tts_voice_missing">No %1$s voice is installed, so it cannot be spoken. Add one in Settings, Text to Speech.</string>
     <string name="error_tts">There was an error with the tts initialization, do you want to continue without tts?</string>
     <string name="error_missing_tts">In this device there is no google tts engine, download it to be able to use the tts</string>
     <string name="error_missing_bluetooth_le">It is not possible to use the Conversation mode because this device does not have Bluetooth Low Energy</string>
@@ -238,6 +239,8 @@
     <string name="preference_description_languages_quality">It allow to also supports languages that have low translation or speech recognition quality</string>
     <string name="preference_description_show_original_transcription_msg_preference">It allows to show the original transcription beyond the translation of the message.</string>
     <string name="preference_description_support_tts_quality">It allow to also supports languages that have a low quality speech synthesizer</string>
+    <string name="preference_title_streaming_speech">Speak while translating</string>
+    <string name="preference_description_streaming_speech">In WalkieTalkie mode, speak each phrase as soon as it is translated instead of waiting for the whole sentence</string>
     <string name="preference_description_tts">System settings of tts, an eventual change of the preferred engine will be applied only after the restart of the app</string>
     <string name="preference_description_speech_timeout">Select the time after you stop talking to send the transcribed text</string>
     <string name="preference_description_prev_voice_duration">Select the length of the recording before you start speaking that will be included in the voice recognition</string>
