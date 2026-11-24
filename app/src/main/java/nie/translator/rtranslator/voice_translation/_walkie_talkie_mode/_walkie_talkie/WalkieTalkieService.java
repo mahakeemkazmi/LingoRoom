@@ -34,6 +34,7 @@ import nie.translator.rtranslator.tools.CustomLocale;
 import nie.translator.rtranslator.tools.ErrorCodes;
 import nie.translator.rtranslator.tools.Tools;
 import nie.translator.rtranslator.tools.gui.messages.GuiMessage;
+import nie.translator.rtranslator.voice_translation.StreamingSpeechChunker;
 import nie.translator.rtranslator.voice_translation.VoiceTranslationService;
 import nie.translator.rtranslator.voice_translation.neural_networks.NeuralNetworkApiResult;
 import nie.translator.rtranslator.voice_translation.neural_networks.translation.Translator;
@@ -48,6 +49,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
     //properties
     public static final int SPEECH_BEAM_SIZE = 1;
     public static final int TRANSLATOR_BEAM_SIZE = 1;
+    private static final int SPEECH_STREAM_TIMEOUT_MS = 20000;
 
     // commands
     public static final int CHANGE_FIRST_LANGUAGE = 22;
@@ -75,6 +77,21 @@ public class WalkieTalkieService extends VoiceTranslationService {
     private CustomLocale secondLanguage;
     private Translator.TranslateListener firstResultTranslateListener;
     private Translator.TranslateListener secondResultTranslateListener;
+    // streaming speech (the translation is spoken phrase by phrase while it is generated)
+    private final StreamingSpeechChunker speechChunker = new StreamingSpeechChunker();
+    private final Object speechStreamLock = new Object();
+    private boolean streamingSpeechEnabled = true;
+    private boolean speechStreamPending = false;   // true between the first spoken phrase and the final result of a translation
+    private boolean micRestartDeferred = false;    // true if the tts finished its queue while more phrases were still expected
+    private final Runnable speechStreamTimeout = new Runnable() {
+        @Override
+        public void run() {
+            if (abortSpeechStream()) {
+                startVoiceRecorder();
+                notifyMicActivated();
+            }
+        }
+    };
 
 
     @Override
@@ -84,6 +101,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
         speechRecognizer = ((Global) getApplication()).getSpeechRecognizer();
         SharedPreferences sharedPreferences = this.getSharedPreferences("default", Context.MODE_PRIVATE);
         isAudioMute = !sharedPreferences.getBoolean("walkieTalkieAutoTTS", true);
+        streamingSpeechEnabled = sharedPreferences.getBoolean("walkieTalkieStreamingTTS", true);
         clientHandler = new Handler(new Handler.Callback() {
             @Override
             public boolean handleMessage(@NonNull android.os.Message message) {
@@ -324,14 +342,14 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onSuccess(ArrayList<CustomLocale> ttsLanguages) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, true, isFinal);
-                        if(isFinal && CustomLocale.containsLanguage(ttsLanguages, outputLanguage) && !isAudioMute) { // check if the text can be spoken
-                            speak(message, outputLanguage);
-                        }
+                        // we speak the translation phrase by phrase while it is still being generated
+                        boolean canSpeak = CustomLocale.containsLanguage(ttsLanguages, outputLanguage);
+                        boolean restartMic = speakStreaming(textToTranslate, translatedText, resultID, true, isFinal, inputLanguage, outputLanguage, canSpeak);
                         WalkieTalkieService.super.notifyMessage(message);
                         // we save every new message in the exchanged messages so that the fragment can restore them
                         WalkieTalkieService.super.addOrUpdateMessage(message);
-                        //if the tts is not active we restart the mic here
-                        if(isFinal && (ttsEngine == null || !CustomLocale.containsLanguage(ttsLanguages, outputLanguage) || !ttsEngine.isActive() || isAudioMute)){
+                        //if the tts is not active (or has already spoken everything) we restart the mic here
+                        if(restartMic){
                             startVoiceRecorder();
                             notifyMicActivated();
                         }
@@ -353,8 +371,9 @@ public class WalkieTalkieService extends VoiceTranslationService {
             @Override
             public void onFailure(int[] reasons, long value) {
                 WalkieTalkieService.super.notifyError(reasons,value);
-                //if the tts is not active we restart the mic here
-                if(ttsEngine == null || !ttsEngine.isActive() || isAudioMute){
+                //if the tts is not active (or a streamed speech was cut short and has nothing left to say) we restart the mic here
+                boolean streamNeedsMicRestart = abortSpeechStream();
+                if(ttsEngine == null || !ttsEngine.isActive() || isAudioMute || streamNeedsMicRestart){
                     startVoiceRecorder();
                     notifyMicActivated();
                 }
@@ -367,14 +386,14 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onSuccess(ArrayList<CustomLocale> ttsLanguages) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, false, isFinal);
-                        if(isFinal && CustomLocale.containsLanguage(ttsLanguages, outputLanguage) && !isAudioMute) { // check if the text can be spoken
-                            speak(message, outputLanguage);
-                        }
+                        // we speak the translation phrase by phrase while it is still being generated
+                        boolean canSpeak = CustomLocale.containsLanguage(ttsLanguages, outputLanguage);
+                        boolean restartMic = speakStreaming(textToTranslate, translatedText, resultID, false, isFinal, inputLanguage, outputLanguage, canSpeak);
                         WalkieTalkieService.super.notifyMessage(message);
                         // we save every new message in the exchanged messages so that the fragment can restore them
                         WalkieTalkieService.super.addOrUpdateMessage(message);
-                        //if the tts is not active we restart the mic here
-                        if(isFinal && (ttsEngine == null || !CustomLocale.containsLanguage(ttsLanguages, outputLanguage) || !ttsEngine.isActive() || isAudioMute)){
+                        //if the tts is not active (or has already spoken everything) we restart the mic here
+                        if(restartMic){
                             startVoiceRecorder();
                             notifyMicActivated();
                         }
@@ -396,8 +415,9 @@ public class WalkieTalkieService extends VoiceTranslationService {
             @Override
             public void onFailure(int[] reasons, long value) {
                 WalkieTalkieService.super.notifyError(reasons,value);
-                //if the tts is not active we restart the mic here
-                if(ttsEngine == null || !ttsEngine.isActive() || isAudioMute){
+                //if the tts is not active (or a streamed speech was cut short and has nothing left to say) we restart the mic here
+                boolean streamNeedsMicRestart = abortSpeechStream();
+                if(ttsEngine == null || !ttsEngine.isActive() || isAudioMute || streamNeedsMicRestart){
                     startVoiceRecorder();
                     notifyMicActivated();
                 }
@@ -405,6 +425,78 @@ public class WalkieTalkieService extends VoiceTranslationService {
         };
         //voice recorder initialization
         initializeVoiceRecorder();
+    }
+
+    /**
+     * Speaks the translation phrase by phrase while it is still being generated, instead of waiting for the whole text.
+     * Must be called for every partial and final result of a translation.
+     * @return true if the caller must restart the mic (nothing is being spoken and nothing more will be)
+     */
+    private boolean speakStreaming(String textToTranslate, String translatedText, long resultID, boolean isMine, boolean isFinal, CustomLocale inputLanguage, CustomLocale outputLanguage, boolean languageHasVoice) {
+        synchronized (speechStreamLock) {
+            boolean canSpeak = languageHasVoice && !isAudioMute && ttsEngine != null && ttsEngine.isActive();
+            if (!canSpeak) {
+                boolean micWasLeftOff = speechStreamPending && (micRestartDeferred || ttsEngine == null || !ttsEngine.isBusy());
+                clearSpeechStream();
+                return isFinal || micWasLeftOff;
+            }
+            if (!isFinal && !streamingSpeechEnabled) {
+                return false;   // old behaviour: speak only when the translation is complete
+            }
+            if (isFinal) {
+                speechStreamPending = false;
+                mainHandler.removeCallbacks(speechStreamTimeout);
+            }
+            String chunk = speechChunker.nextChunk(resultID, translatedText, isFinal);
+            if (chunk != null) {
+                if (!isFinal) {
+                    speechStreamPending = true;
+                    // safety net: if the translation never completes, we do not want to leave the mic off forever
+                    mainHandler.removeCallbacks(speechStreamTimeout);
+                    mainHandler.postDelayed(speechStreamTimeout, SPEECH_STREAM_TIMEOUT_MS);
+                }
+                micRestartDeferred = false;
+                speak(new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, chunk), inputLanguage, outputLanguage, resultID, isMine, isFinal), outputLanguage);
+                return false;
+            }
+            if (isFinal) {
+                // nothing left to speak: if the tts has already finished the previous phrases the mic is still off
+                boolean restartMic = micRestartDeferred || !ttsEngine.isBusy();
+                micRestartDeferred = false;
+                return restartMic;
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Ends a streamed speech whose translation will not complete.
+     * @return true if the mic was left off by the stream and must be restarted by the caller
+     */
+    private boolean abortSpeechStream() {
+        synchronized (speechStreamLock) {
+            boolean micWasLeftOff = speechStreamPending && (micRestartDeferred || ttsEngine == null || !ttsEngine.isBusy());
+            clearSpeechStream();
+            return micWasLeftOff;
+        }
+    }
+
+    private void clearSpeechStream() {
+        speechStreamPending = false;
+        micRestartDeferred = false;
+        speechChunker.reset();
+        mainHandler.removeCallbacks(speechStreamTimeout);
+    }
+
+    @Override
+    protected boolean deferMicRestartForSpeechStream() {
+        synchronized (speechStreamLock) {
+            if (speechStreamPending) {
+                micRestartDeferred = true;
+                return true;
+            }
+            return false;
+        }
     }
 
     public void initializeVoiceRecorder(){
@@ -435,6 +527,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
 
     @Override
     public void onDestroy() {
+        mainHandler.removeCallbacks(speechStreamTimeout);
         Log.i("walkieTalkie", "WalkieTalkie service destroyed");
         //disconnect speechRecognizerCallback
         speechRecognizer.removeMultiCallback(speechRecognizerCallback);

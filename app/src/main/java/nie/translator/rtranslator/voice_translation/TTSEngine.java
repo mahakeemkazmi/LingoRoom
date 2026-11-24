@@ -174,6 +174,11 @@ public class TTSEngine {
         return messageQueue.isEmpty();
     }
 
+    /** @return true if something is being spoken or is waiting to be spoken */
+    public boolean isBusy(){
+        return speaking || !messageQueue.isEmpty();
+    }
+
     public void stop(){
         if(tts != null) tts.stop();
         boolean notify = listener != null && (executingMessage != null || !messageQueue.isEmpty());
