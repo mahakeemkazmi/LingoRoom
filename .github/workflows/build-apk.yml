@@ -27,11 +27,11 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install NDK and CMake used by the app
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.12674087" "cmake;3.22.1"
+      - name: Install Android platform, NDK and CMake used by the app
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.12674087" "cmake;3.22.1"
 
       - name: Build debug APK
         run: |
