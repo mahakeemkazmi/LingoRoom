@@ -28,7 +28,7 @@ android {
     //compileSdkVersion 33  //33
     ndkVersion "28.0.12674087"
     defaultConfig {
-        applicationId "nie.translator.rtranslator"
+        applicationId "com.exelere.lingoroom"
         targetSdkVersion 36   //32
         compileSdk 36
         versionName '3.0.0-beta2'

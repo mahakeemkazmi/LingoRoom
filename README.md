@@ -1,3 +1,9 @@
+# Lingo Room
+
+Lingo Room is an offline live interpreter app for Android by Exelere. It is a fork of the open source [RTranslator](https://github.com/niedev/RTranslator) project by Luca Martino (niedev), used under the Apache License 2.0. Changes made in this fork are recorded in the commit history. The original README follows.
+
+---
+
 <img src="https://github.com/niedev/RTranslator/blob/v2.00/images/logo_beta_cut.png" width="280">
 
 RTranslator is an (<a href='https://github.com/niedev/RTranslator?tab=readme-ov-file#libraries-and-models'>almost</a>) open-source, free, and offline real-time translation app for Android.
