@@ -87,7 +87,7 @@
 
     <string name="notification_channel_name">背景通知</string>
 
-    <string name="privacy_check_box">我声明我已阅读 <a href="https://github.com/niedev/RTranslator/blob/v2.00/privacy/Privacy_Policy_en.md">隐私政策</a></string>
+    <string name="privacy_check_box">我声明我已阅读 <a href="https://github.com/mahakeemkazmi/LingoRoom/blob/v3.00/privacy/Privacy_Policy_en.md">隐私政策</a></string>
 
     <string name="toast_working_background">Lingo Room 将在背景中运行</string>
     <string name="toast_download_completed">下载完成</string>

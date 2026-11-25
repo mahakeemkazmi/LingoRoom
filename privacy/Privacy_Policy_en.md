@@ -1,97 +1,62 @@
-<h3 align="center">PRIVACY POLICY</h3> <br />
+# Lingo Room Privacy Policy
 
-In compliance with the obligations deriving from community legislation (European Regulation for the protection of personal data n. 679/2016, GDPR) and subsequent amendments, this application on mobile device (hereinafter also "App") RTranslator respects and protects the confidentiality of visitors and users, by putting in place measures proportionately designed not to infringe the rights of users.<br />
-This document also takes into account Recommendation no. 2/2001 that the European Authorities for the protection of personal data have adopted to identify the minimum requirements for the collection of personal data online.<br />
-This Privacy Policy applies to the online activities of the App and is valid for visitors / users of the same.<br />
-The purpose of the Privacy Policy is to provide maximum transparency regarding the information that the site collects and uses.
-<br /><br /><br />
+Last updated: 25 November 2026
 
-#### TYPES OF DATA PROCESSED
-Browsing the App for consultation does not require any request for personal data, however, technologies are used that involve the storage of some data relating to the tools used, which can be traced back to the user in some way.<br />
-By way of example but not limited to, this App uses the user's location, exclusively in order to allow the proper functioning of the bluetooth and the data, such as audio and its transcription, which will be sent to third parties, such as Google.
-<br /><br />
+Lingo Room is a live interpreter app for Android published by Exelere. This policy explains what the app does with your information. The short version: Lingo Room works on your phone, and we do not collect, receive or sell your personal data.
 
-#### Navigation data
-The computer systems and software procedures used to operate this App acquire, during their normal operation and only for the duration of the connection, some data whose transmission is implicit in the use of Internet communication protocols.<br />
-This is information that is not collected to be associated with identified data subjects, but which by their very nature could, through processing and association with data held by third parties, allow users to be identified. This category of data includes:
-- internet protocol (IP) address associated with the device used to connect;
-- type of browser and device parameters used to connect to the app;
-- date and time of visit;
-- parameters relating to the operating system;
-- geolocation.
-<br /><br />
+## Summary
 
-#### Data provided voluntarily by the User
-The personal data provided voluntarily by the User, such as name and profile picture, are saved only and exclusively on the device of the user using the App as well as transmitted, via Bluetooth system, and then saved on the mobile device with which you are communicating.<br />
-Such data will in no way be managed by RTranslator.<br />
-The optional, explicit and voluntary sending of e-mails to the addresses indicated on this App entails the subsequent acquisition of the sender's address, necessary to respond to requests, as well as any other personal data included in the message.<br />
-Specific summary information, in which the consent of the processing of the processed data is expressly requested, if necessary, will be displayed on the pages of the App prepared for particular services on request.
-<br /><br />
+- Speech recognition and translation run on your phone. Your voice and your conversations are not sent to us.
+- There is no account, no sign in, no advertising and no analytics or tracking in the app.
+- The app contacts the internet only to download its language and speech models.
+- If you use Conversation mode, your name, picture and messages go directly to the phone you connect to, over Bluetooth.
 
-#### Data deriving from the installation of the APP
-The "RTranslator" App does not process and manage any type of personal data, except those deriving from the installation and use of the same.
-After downloading and installing the App, the model used, as well as the type and version of the operating system used, are automatically detected by the mobile device. This information helps us to provide the required services and manage the App, analyze its use, protect the app and its content from inappropriate or inappropriate use and improve the user experience.<br />
-The only data used, relating to the user's data such as audio and the transcription of the same, are those that will then be sent to third parties, in this case Google, which allow to provide the services made available to the App. take care of its maintenance, improve it and communicate with users.<br />
-The download of the App is also used as a numeric data for the sole purpose of obtaining anonymous statistical information about the number of users who download the App itself.<br />
-As regards the data saved by the App in the device keystore, on the basis of the operating system used, the following is reported:
-- Android: the data is saved in the shared preferences until the customer executes "Clear data" from the Application Manager or uninstalls the App;
-- iOS: the data is saved in the keystore.
+## Who is responsible
 
-The App Owner is not involved in these treatments; for more information regarding the saving and deletion of data on the device, please refer to the manufacturers of the operating systems used.
-Geolocation data and data sent and third parties
-<br /><br />
+Lingo Room is published by Exelere. For any question about this policy or your privacy, contact us at: **[CONTACT EMAIL TO BE ADDED BEFORE RELEASE]**
 
-#### Geolocation data and data sent and third parties
-For the proper functioning of the App RTranslator collects information only on the location of the device for the sole purpose of allowing the correct use of bluetooth.<br />
-RTranslator in any case collects and processes data that will then be sent to Google, such as: audio, the transcription of which is transmitted at a later time via bluetooth to the phone with which you are communicating, and the transcription of the audio received by the other user, to carry out the translation.<br />
-<br /><br /><br />
+## Information that stays on your phone
 
-#### PURPOSE OF THE TREATMENT
-a) provide the requested services and manage relationships with users; <br />
-b) to fulfill the requirements dictated by national and community regulations; <br />
-c) for security purposes, the automatically recorded data may possibly also include personal data such as the IP address, which could be used, in accordance with the laws in force on the subject, in order to block attempts to damage the app or in any case harmful activities or constituting a crime.
-<br /><br />
-This information is treated on the basis of the legitimate interests of the owner.
-<br /><br /><br />
+The app handles the following information on your device only. We cannot see it.
 
-#### THIRD PARTY SERVICE PROVIDERS
-Like the Data Controller, in the cases mentioned above, Google will also have access to certain types of data.<br />
-However, the data to which Google will have access will only be those necessary to perform the services of the App.<br />
-We guarantee that the data, in particular of geolocation and audio, cannot be used for other purposes and in any case must be treated in accordance with this privacy policy.<br />
-It should be noted that the computer systems and software procedures used to operate the App (Apple Store, Google Play) acquire, during their normal operation, some data in any case referable to the user whose transmission is implicit in the use of internet communication protocols, smartphones and devices used.<br />
-The Data Controller is not involved in such treatments nor can he be held responsible for them.<br />
-The interested party may, however, consult the privacy information made available on the following sites: <br />
-##### Apple Store: https://www.apple.com/legal/internet-services/itunes/it/terms.html
-##### Google Play: https://play.google.com/intl/it_it/about/play-terms.html
-<br /><br />
+- **Your voice.** The microphone audio is turned into text by a speech model running on your phone. The audio is processed in memory and is not uploaded.
+- **Transcriptions and translations.** The text of what was said and its translation are shown on your screen and are not sent to us.
+- **Your name and profile picture.** You choose these when you set up the app. They are stored on your phone and are shared only as described under Conversation mode below.
+- **Devices you have connected to.** The app keeps a list of recent Conversation mode partners on your phone, so you can reconnect to them.
+- **Your settings**, such as your chosen languages.
 
-#### SECURITY MEASURES AND PROCESSING METHODS
-Personal data will not be processed in any way by the Data Controller.
-<br /><br /><br />
+Removing the app, or clearing its data in Android settings, deletes all of this.
 
-#### COMMUNICATION AND DIFFUSION
-The personal data collected will not be processed in any way by the Data Controller but will only be saved on the user's device. Therefore, no personal data can be disclosed, sold, exchanged or communicated with third parties.
-<br /><br /><br />
+## Information that leaves your phone
 
-#### PROHIBITION OF DATA TRANSFER TO NON-EU COUNTRIES
-However, this App cannot share data collected with services located outside the European Union area because the transfer of data outside the European Union has been prohibited.<br />
-In fact, the Court declared the Commission Decision 2016/1250 invalid by which the adequacy of this mechanism was decided.
-<br /><br /><br />
+- **Model downloads.** The first time you start the app, and when you turn on extra languages or models, the app downloads model files from GitHub. As with any download, GitHub receives your IP address and standard technical details of the request. See the [GitHub Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement). The download does not include your voice, your text or your name.
+- **Conversation mode.** When you connect to another phone, your name, your profile picture and the text of your messages are sent directly to that phone over Bluetooth. They do not pass through any server. The other person's app stores your name and picture so that they can recognize you later.
+- **Spoken output.** To speak a translation aloud, the app hands the translated text to the text to speech engine installed on your phone, for example Google's. That engine belongs to its own provider and is covered by that provider's privacy policy.
 
-#### USER RIGHTS
-Pursuant to European Regulation 679/2016 (GDPR) and national legislation, the User can, according to the methods and within the limits established by current legislation, exercise the following rights:
-- request confirmation of the existence or not of personal data concerning him (right of access);
-- have information about the logic, methods and purposes of the processing;
-- request the updating, rectification, integration, cancellation, transformation into anonymous form, blocking of data processed in violation of the law, including those no longer necessary for the pursuit of the purposes for which they were collected;
-- in cases of consent-based processing, receive, at the cost of any support only, its data provided to the owner and held by it, in a structured and readable form by a data processor and in a format commonly used by an electronic device;
-- the right to lodge a complaint with the Supervisory Authority (Privacy Guarantor - <a href="http://www.garanteprivacy.it/web/guest/home/docweb/-/docweb-display/docweb/4535524" target="_blank" rel="noopener noreferrer">link to the Guarantor page</a>);
-- as well as, more generally, to exercise all the rights that are recognized by the current provisions of the law.
+If you install the app from an app store, the store has its own privacy policy for the download itself.
 
-Requests should be addressed to the Data Controller.<br />
-In the event that the data are processed on the basis of legitimate interests, the rights of the data subjects are guaranteed (except the right to portability which is not provided for by the rules), in particular the right to object to the processing that can be exercised by sending a request to the Data Controller. It is possible to object to the processing of your personal data: <br />
-a) for legitimate reasons; <br />
-b) (without the need to justify the opposition) when the data are processed for commercial or marketing purposes.
-<br /><br /><br />
+## Permissions the app asks for
 
-#### HOLDER OF THE TREATMENT
-The data controller pursuant to the laws in force is Luca Martino, with registered office located in via delle capanne vecchia 24, Pistoia 51100, Italy, who can be contacted by email: contact.niedev@gmail.com
+- **Microphone:** to hear what you say, so it can be translated.
+- **Nearby devices and Bluetooth:** to find and connect to another phone in Conversation mode.
+- **Location:** some versions of Android require this permission before an app may search for Bluetooth devices. Lingo Room does not read, store or share your location.
+- **Notifications:** to show that the app is listening or downloading while it is in the background.
+- **Internet and network state:** to download model files.
+
+You can refuse or withdraw any permission in Android settings. The features that depend on it will stop working until you allow it again.
+
+## Children
+
+Lingo Room does not knowingly collect personal information from anyone, including children.
+
+## Your rights
+
+Because we do not collect or hold your personal data, we have nothing to give you access to, correct or delete. Everything the app keeps is on your own phone and under your control. Depending on where you live, you may still have rights under laws such as the Australian Privacy Act, India's Digital Personal Data Protection Act or the European GDPR, and you can contact us at the address above about them.
+
+## Changes to this policy
+
+If the app changes in a way that affects your privacy, for example by adding an online feature, we will update this policy and change the date at the top before the change reaches you.
+
+## Open source
+
+Lingo Room is open source and is built on the RTranslator project. Its source code is available at https://github.com/mahakeemkazmi/LingoRoom, so anyone can check what the app does.
