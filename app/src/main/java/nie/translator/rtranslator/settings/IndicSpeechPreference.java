@@ -23,6 +23,7 @@ import android.util.AttributeSet;
 import android.widget.Toast;
 
 import androidx.preference.Preference;
+import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreference;
 
 import nie.translator.rtranslator.R;
@@ -30,7 +31,8 @@ import nie.translator.rtranslator.voice_translation.neural_networks.voice.indic.
 
 /**
  * Experimental switch: listen to Urdu with a speech model built for Indian languages.
- * Turning it on for the first time downloads the model (about 200 MB), then enables it.
+ * Turning it on for the first time downloads the model (about 200 MB). The switch stays on during the download
+ * and goes back off only if the download fails.
  */
 public class IndicSpeechPreference extends SwitchPreference {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -56,21 +58,19 @@ public class IndicSpeechPreference extends SwitchPreference {
     }
 
     private void initialize() {
-        setPersistent(false);   // the real state lives in the "default" preferences file and in the downloaded files
+        // The switch position is stored by the settings screen itself, like the other switches of this screen.
+        // The engine reads its own copy from the "default" preferences file, written by IndicSpeechEngine.setEnabled.
         setOnPreferenceChangeListener(new OnPreferenceChangeListener() {
             @Override
             public boolean onPreferenceChange(Preference preference, Object newValue) {
                 final Context context = getContext().getApplicationContext();
-                if (!(Boolean) newValue) {
-                    IndicSpeechEngine.setEnabled(context, false);
-                    return true;
+                boolean enable = (Boolean) newValue;
+                IndicSpeechEngine.setEnabled(context, enable);
+                if (enable && !IndicSpeechEngine.isDownloaded(context)) {
+                    // the switch stays on while the model downloads, the engine only starts using it once it is complete
+                    startDownload(context);
                 }
-                if (IndicSpeechEngine.isDownloaded(context)) {
-                    IndicSpeechEngine.setEnabled(context, true);
-                    return true;
-                }
-                startDownload(context);
-                return false;   // the switch turns on by itself when the download is complete
+                return true;
             }
         });
     }
@@ -79,10 +79,18 @@ public class IndicSpeechPreference extends SwitchPreference {
     public void onAttached() {
         super.onAttached();
         Context context = getContext().getApplicationContext();
-        setChecked(IndicSpeechEngine.isEnabled(context));
         if (IndicSpeechEngine.isDownloading()) {
             setSummary(context.getString(R.string.preference_indic_speech_downloading, IndicSpeechEngine.getDownloadPercent()));
+        } else if (isChecked() && !IndicSpeechEngine.isDownloaded(context)) {
+            // the switch was left on but the model is missing (for example after a failed download)
+            setChecked(false);
+            IndicSpeechEngine.setEnabled(context, false);
         }
+    }
+
+    /** Stores the switch position where the settings screen reads it, even if this screen is no longer open. */
+    private static void storeSwitchPosition(Context context, boolean checked) {
+        PreferenceManager.getDefaultSharedPreferences(context).edit().putBoolean(IndicSpeechEngine.PREFERENCE_KEY, checked).apply();
     }
 
     private void startDownload(final Context context) {
@@ -100,16 +108,13 @@ public class IndicSpeechPreference extends SwitchPreference {
 
             @Override
             public void onFinished(final boolean success) {
-                if (success) {
-                    IndicSpeechEngine.setEnabled(context, true);
-                }
+                IndicSpeechEngine.setEnabled(context, success);
+                storeSwitchPosition(context, success);
                 mainHandler.post(new Runnable() {
                     @Override
                     public void run() {
                         setSummary(R.string.preference_description_indic_speech);
-                        if (success) {
-                            setChecked(true);
-                        }
+                        setChecked(success);
                         Toast.makeText(context, success ? R.string.preference_indic_speech_ready : R.string.preference_indic_speech_failed, Toast.LENGTH_LONG).show();
                     }
                 });
