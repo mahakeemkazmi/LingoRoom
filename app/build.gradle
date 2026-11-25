@@ -70,6 +70,17 @@ android {
         buildConfig true
     }
 
+    signingConfigs {
+        // Fixed key for test builds only, see app/test-signing/README.md.
+        // A public release must use a private key that is not in the repository.
+        debug {
+            storeFile file('test-signing/lingoroom-test.keystore')
+            storePassword 'android'
+            keyAlias 'lingoroomtest'
+            keyPassword 'android'
+        }
+    }
+
     buildTypes {
         debug {
             minifyEnabled false
