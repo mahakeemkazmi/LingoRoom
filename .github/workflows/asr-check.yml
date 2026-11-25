@@ -63,30 +63,60 @@ jobs:
       - name: Fetch real speech clips (FLEURS test set)
         continue-on-error: true
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg jq espeak-ng > /dev/null
-          for cfg in ur_pk hi_in; do
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg jq > /dev/null
+          : > refs.tsv
+          for cfg in ur_pk hi_in te_in ta_in; do
             mkdir -p clips/$cfg
-            curl -fsSL "https://datasets-server.huggingface.co/rows?dataset=google%2Ffleurs&config=$cfg&split=test&offset=0&length=8" -o clips/$cfg/rows.json || { echo "no rows for $cfg"; continue; }
+            ok=""
+            for attempt in 1 2 3; do
+              if curl -fsSL "https://datasets-server.huggingface.co/rows?dataset=google%2Ffleurs&config=$cfg&split=test&offset=0&length=25" -o clips/$cfg/rows.json; then ok=1; break; fi
+              sleep 15
+            done
+            if [ -z "$ok" ]; then echo "no rows for $cfg"; continue; fi
             jq -r '.rows[] | [.row_idx, .row.audio[0].src, (.row.transcription // .row.raw_transcription)] | @tsv' clips/$cfg/rows.json > clips/$cfg/list.tsv || true
             while IFS=$'\t' read -r idx src text; do
-              curl -fsSL "$src" -o clips/$cfg/$idx.src && ffmpeg -loglevel error -y -i clips/$cfg/$idx.src -ar 16000 -ac 1 -sample_fmt s16 clips/$cfg/$idx.wav || true
-              echo "REFERENCE	clips/$cfg/$idx.wav	$text"
+              if curl -fsSL "$src" -o clips/$cfg/$idx.src && ffmpeg -loglevel error -y -i clips/$cfg/$idx.src -ar 16000 -ac 1 -sample_fmt s16 clips/$cfg/$idx.wav; then
+                printf 'REFERENCE\tclips/%s/%s.wav\t%s\n' "$cfg" "$idx" "$text" >> refs.tsv
+              fi
+              rm -f clips/$cfg/$idx.src
             done < clips/$cfg/list.tsv
           done
-          # short synthetic phrases, robotic but useful for the two word case
-          mkdir -p clips/synth
-          espeak-ng -v ur "کل صبح" -w clips/synth/ur_kal_subah.raw.wav || true
-          espeak-ng -v ur "میں کل صبح دفتر آؤں گا" -w clips/synth/ur_sentence.raw.wav || true
-          espeak-ng -v hi "कल सुबह" -w clips/synth/hi_kal_subah.raw.wav || true
-          for f in clips/synth/*.raw.wav; do ffmpeg -loglevel error -y -i "$f" -ar 16000 -ac 1 -sample_fmt s16 "${f%.raw.wav}.wav" || true; rm -f "$f"; done
-          ls -la clips/*
+          wc -l refs.tsv
 
-      - name: Recognize Urdu
+      - name: Download the Telugu and Tamil models
+        continue-on-error: true
+        run: |
+          mkdir -p models/te models/ta
+          curl -fSL -o models/te/model.int8.onnx "$HF/te/model.int8.onnx"
+          curl -fSL -o models/ta/model.int8.onnx "$HF/ta/model.int8.onnx"
+
+      - name: Recognize with IndicConformer
         run: |
           shopt -s nullglob
-          java -cp out:lib/onnxruntime.jar AsrCheck models/ur/model.int8.onnx models/tokens.txt clips/ur_pk/*.wav clips/synth/ur_*.wav
+          : > indic.tsv
+          for pair in ur:ur_pk hi:hi_in te:te_in ta:ta_in; do
+            lang=${pair%%:*}; cfg=${pair##*:}
+            clips=(clips/$cfg/*.wav)
+            if [ ${#clips[@]} -gt 0 ] && [ -s models/$lang/model.int8.onnx ]; then
+              java -cp out:lib/onnxruntime.jar AsrCheck models/$lang/model.int8.onnx models/tokens.txt "${clips[@]}" | tee -a indic.tsv
+            fi
+          done
 
-      - name: Recognize Hindi
+      - name: Recognize with Whisper small (what the app uses today)
+        continue-on-error: true
         run: |
           shopt -s nullglob
-          java -cp out:lib/onnxruntime.jar AsrCheck models/hi/model.int8.onnx models/tokens.txt clips/hi_in/*.wav clips/synth/hi_*.wav
+          pip install -q faster-whisper
+          : > whisper.tsv
+          for pair in ur:ur_pk hi:hi_in te:te_in ta:ta_in; do
+            lang=${pair%%:*}; cfg=${pair##*:}
+            clips=(clips/$cfg/*.wav)
+            if [ ${#clips[@]} -gt 0 ]; then
+              python3 tools/asr-check/whisper_baseline.py $lang "${clips[@]}" | tee -a whisper.tsv
+            fi
+          done
+
+      - name: Scores
+        run: |
+          touch refs.tsv indic.tsv whisper.tsv
+          python3 tools/asr-check/score.py refs.tsv indic.tsv whisper.tsv
