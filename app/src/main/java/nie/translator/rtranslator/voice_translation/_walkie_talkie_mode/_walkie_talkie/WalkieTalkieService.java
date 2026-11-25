@@ -23,11 +23,15 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
 
+import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 
 import nie.translator.rtranslator.Global;
+import nie.translator.rtranslator.R;
 import nie.translator.rtranslator.bluetooth.Message;
 import nie.translator.rtranslator.bluetooth.Peer;
 import nie.translator.rtranslator.tools.CustomLocale;
@@ -80,7 +84,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
     // streaming speech (the translation is spoken phrase by phrase while it is generated)
     private final StreamingSpeechChunker speechChunker = new StreamingSpeechChunker();
     private final Object speechStreamLock = new Object();
-    private boolean streamingSpeechEnabled = true;
+    private final HashSet<String> languagesNotifiedAsMissingVoice = new HashSet<>();
     private boolean speechStreamPending = false;   // true between the first spoken phrase and the final result of a translation
     private boolean micRestartDeferred = false;    // true if the tts finished its queue while more phrases were still expected
     private final Runnable speechStreamTimeout = new Runnable() {
@@ -101,7 +105,6 @@ public class WalkieTalkieService extends VoiceTranslationService {
         speechRecognizer = ((Global) getApplication()).getSpeechRecognizer();
         SharedPreferences sharedPreferences = this.getSharedPreferences("default", Context.MODE_PRIVATE);
         isAudioMute = !sharedPreferences.getBoolean("walkieTalkieAutoTTS", true);
-        streamingSpeechEnabled = sharedPreferences.getBoolean("walkieTalkieStreamingTTS", true);
         clientHandler = new Handler(new Handler.Callback() {
             @Override
             public boolean handleMessage(@NonNull android.os.Message message) {
@@ -436,11 +439,14 @@ public class WalkieTalkieService extends VoiceTranslationService {
         synchronized (speechStreamLock) {
             boolean canSpeak = languageHasVoice && !isAudioMute && ttsEngine != null && ttsEngine.isActive();
             if (!canSpeak) {
+                if (isFinal && !languageHasVoice && !isAudioMute) {
+                    notifyVoiceMissing(outputLanguage);
+                }
                 boolean micWasLeftOff = speechStreamPending && (micRestartDeferred || ttsEngine == null || !ttsEngine.isBusy());
                 clearSpeechStream();
                 return isFinal || micWasLeftOff;
             }
-            if (!isFinal && !streamingSpeechEnabled) {
+            if (!isFinal && !isStreamingSpeechEnabled()) {
                 return false;   // old behaviour: speak only when the translation is complete
             }
             if (isFinal) {
@@ -467,6 +473,29 @@ public class WalkieTalkieService extends VoiceTranslationService {
             }
             return false;
         }
+    }
+
+    private boolean isStreamingSpeechEnabled() {
+        // read every time, so a change in the settings applies without restarting the mode
+        return getSharedPreferences("default", Context.MODE_PRIVATE).getBoolean("walkieTalkieStreamingTTS", true);
+    }
+
+    /**
+     * Tells the user, once per language, why a translation is shown but not spoken.
+     */
+    private void notifyVoiceMissing(final CustomLocale language) {
+        final String code = language.getLanguage();
+        synchronized (languagesNotifiedAsMissingVoice) {
+            if (!languagesNotifiedAsMissingVoice.add(code)) {
+                return;
+            }
+        }
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(WalkieTalkieService.this, getString(R.string.error_tts_voice_missing, language.getDisplayLanguage()), Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     /**

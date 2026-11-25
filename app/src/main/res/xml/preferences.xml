@@ -89,6 +89,12 @@
             android:title="@string/preference_title_tts"
             android:summary="@string/preference_description_tts"
             app:iconSpaceReserved="false" />
+        <nie.translator.rtranslator.settings.StreamingSpeechPreference
+            android:defaultValue="true"
+            android:key="walkieTalkieStreamingTTS"
+            android:title="@string/preference_title_streaming_speech"
+            android:summary="@string/preference_description_streaming_speech"
+            app:iconSpaceReserved="false" />
     </androidx.preference.PreferenceCategory>
     <androidx.preference.PreferenceCategory
         android:title="@string/preference_header_advanced"
