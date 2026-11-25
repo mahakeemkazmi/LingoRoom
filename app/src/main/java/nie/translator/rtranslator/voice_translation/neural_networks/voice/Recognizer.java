@@ -163,6 +163,7 @@ public class Recognizer extends NeuralNetworkApi {
             "yue"
     };
 
+    private volatile AlternativeRecognizer alternativeRecognizer;
     private final int START_TOKEN_ID = 50258;
     private final int TRANSCRIBE_TOKEN_ID = 50359;
     private final int NO_TIMESTAMPS_TOKEN_ID = 50363;
@@ -298,6 +299,19 @@ public class Recognizer extends NeuralNetworkApi {
     private void recognize() {
         recognizing = true;
         DataContainer data = dataToRecognize.pollFirst();
+        if (data != null && data.languageCode2 == null) {
+            // a specialised recognizer, when one is available for this language, replaces Whisper
+            String alternativeText = recognizeWithAlternative(data.data, data.languageCode);
+            if (alternativeText != null) {
+                notifyResult(correctText(alternativeText), data.languageCode, 0, true);
+                if (!dataToRecognize.isEmpty()) {
+                    recognize();
+                } else {
+                    recognizing = false;
+                }
+                return;
+            }
+        }
         if (initSession != null && encoderSession != null && cacheInitSession != null && decoderSession != null && detokenizerSession != null) {
             if (data != null) {
                 //we convert data in an audioTensor and start the transcription
@@ -336,6 +350,7 @@ public class Recognizer extends NeuralNetworkApi {
                     ArrayList<Integer> completeOutput2 = new ArrayList<Integer>();
                     double outputProbability1 = 0;
                     double outputProbability2 = 0;
+                    double firstLanguageAudioProbability = -1;  // -1 means unknown
                     boolean finished1 = false;
                     boolean finished2 = false;
                     long initialTime;
@@ -443,6 +458,11 @@ public class Recognizer extends NeuralNetworkApi {
                         decoderOutput = (OnnxTensor) result.get("logits").get();
                         value = (float[][][]) decoderOutput.getValue();
                         outputValues = value[0][0];
+                        if(j == 1 && batchSize == 2 && languageID >= 0 && languageID2 >= 0) {
+                            // After the start token, the model predicts the language of the audio.
+                            // We keep how likely the first language is compared to the second, judged from the sound alone.
+                            firstLanguageAudioProbability = 1.0 / (1.0 + Math.exp(outputValues[languageID2] - outputValues[languageID]));
+                        }
                         if(!finished1) {
                             max = Utils.getIndexOfLargest(outputValues);
                             completeOutput.add(max);
@@ -546,6 +566,13 @@ public class Recognizer extends NeuralNetworkApi {
                         android.util.Log.i("result", "score 1: " + outputProbability1);
                         android.util.Log.i("result", "score 2: " + outputProbability2);
 
+                        // a specialised recognizer, when one is available for one of the two languages, provides a better text for it
+                        String alternativeFirstText = recognizeWithAlternative(data.data, data.languageCode);
+                        if (alternativeFirstText != null) firstText = alternativeFirstText;
+                        String alternativeSecondText = recognizeWithAlternative(data.data, data.languageCode2);
+                        if (alternativeSecondText != null) secondText = alternativeSecondText;
+
+                        notifyMultiLanguageProbability(firstLanguageAudioProbability);
                         notifyMultiResult(correctText(firstText), data.languageCode, outputProbability1, correctText(secondText), data.languageCode2, outputProbability2);
                     }
                     //closing all results
@@ -565,6 +592,40 @@ public class Recognizer extends NeuralNetworkApi {
             recognize();
         }else {
             recognizing = false;
+        }
+    }
+
+    /**
+     * A recognizer that can replace Whisper for the languages it supports.
+     */
+    public interface AlternativeRecognizer {
+        boolean supports(String languageCode);
+
+        /** @return the recognized text, or null if it could not recognize the audio (Whisper is then used) */
+        String recognize(float[] samples, String languageCode);
+    }
+
+    public void setAlternativeRecognizer(AlternativeRecognizer alternativeRecognizer) {
+        this.alternativeRecognizer = alternativeRecognizer;
+    }
+
+    private String recognizeWithAlternative(float[] samples, String languageCode) {
+        AlternativeRecognizer alternative = alternativeRecognizer;
+        if (alternative == null || languageCode == null) {
+            return null;
+        }
+        try {
+            if (!alternative.supports(languageCode)) {
+                return null;
+            }
+            String text = alternative.recognize(samples, languageCode);
+            if (text == null || text.trim().isEmpty()) {
+                return null;
+            }
+            return text;
+        } catch (Throwable error) {
+            Log.e("recognizer", "alternative recognizer failed", error);
+            return null;
         }
     }
 
@@ -655,6 +716,12 @@ public class Recognizer extends NeuralNetworkApi {
     private void notifyResult(String text, String languageCode, double confidenceScore, boolean isFinal) {
         for (int i = 0; i < callbacks.size(); i++) {
             callbacks.get(i).onSpeechRecognizedResult(text, languageCode, confidenceScore, isFinal);
+        }
+    }
+
+    private void notifyMultiLanguageProbability(double firstLanguageProbability) {
+        for (int i = 0; i < multiCallbacks.size(); i++) {
+            multiCallbacks.get(i).onSpeechLanguageProbability(firstLanguageProbability);
         }
     }
 

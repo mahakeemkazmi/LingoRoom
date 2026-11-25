@@ -180,6 +180,8 @@ public class Global extends Application implements DefaultLifecycleObserver {
                     .setSpeechDurationMs(50)
                     .build();
             speechRecognizer = new Recognizer(this, true, initListener);
+            // a speech model built for Indian languages, used for the languages enabled in the settings
+            speechRecognizer.setAlternativeRecognizer(nie.translator.rtranslator.voice_translation.neural_networks.voice.indic.IndicSpeechEngine.getInstance(this));
         }else{
             initListener.onInitializationFinished();
         }

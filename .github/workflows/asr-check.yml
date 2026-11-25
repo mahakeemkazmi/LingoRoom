@@ -1,0 +1,133 @@
+name: Speech model check
+
+# Runs the Indian language speech model outside the app, on real audio clips,
+# so its accuracy can be checked without a phone.
+
+on:
+  push:
+    branches: ["experiment/**"]
+    paths:
+      - "tools/asr-check/**"
+      - ".github/workflows/asr-check.yml"
+      - "app/src/main/java/nie/translator/rtranslator/voice_translation/neural_networks/voice/indic/NemoFeatureExtractor.java"
+      - "app/src/main/java/nie/translator/rtranslator/voice_translation/neural_networks/voice/indic/CtcTokenDecoder.java"
+      - "app/src/main/java/nie/translator/rtranslator/voice_translation/neural_networks/voice/indic/IndicConformerRecognizer.java"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SRC: app/src/main/java/nie/translator/rtranslator/voice_translation/neural_networks/voice/indic
+      HF: https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/main
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Get ONNX Runtime for desktop Java
+        run: |
+          mkdir -p lib
+          # Maven Central sometimes rate limits CI runners, so try a mirror and retry
+          for attempt in 1 2 3 4; do
+            for base in https://maven-central.storage-download.googleapis.com/maven2 https://repo1.maven.org/maven2 https://repo.maven.apache.org/maven2; do
+              for v in 1.30.0 1.24.1 1.22.0; do
+                if curl -fsSL -A "lingo-room-ci" -o lib/onnxruntime.jar "$base/com/microsoft/onnxruntime/onnxruntime/$v/onnxruntime-$v.jar" && [ -s lib/onnxruntime.jar ]; then
+                  echo "Using ONNX Runtime $v from $base"; exit 0
+                fi
+              done
+            done
+            sleep 30
+          done
+          exit 1
+
+      - name: Compile
+        run: |
+          mkdir -p out
+          javac -encoding UTF-8 -cp lib/onnxruntime.jar -d out $SRC/NemoFeatureExtractor.java $SRC/CtcTokenDecoder.java $SRC/IndicConformerRecognizer.java tools/asr-check/AsrCheck.java
+
+      - name: Validate the pipeline on a reference English model
+        run: |
+          curl -fsSL -o en.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-ctc-en-conformer-small.tar.bz2
+          tar xf en.tar.bz2
+          ls -la sherpa-onnx-nemo-ctc-en-conformer-small sherpa-onnx-nemo-ctc-en-conformer-small/test_wavs
+          echo "=== EXPECTED ==="
+          cat sherpa-onnx-nemo-ctc-en-conformer-small/test_wavs/trans.txt || true
+          echo "=== GOT ==="
+          M=sherpa-onnx-nemo-ctc-en-conformer-small/model.int8.onnx
+          test -f "$M" || M=sherpa-onnx-nemo-ctc-en-conformer-small/model.onnx
+          java -cp out:lib/onnxruntime.jar AsrCheck "$M" sherpa-onnx-nemo-ctc-en-conformer-small/tokens.txt sherpa-onnx-nemo-ctc-en-conformer-small/test_wavs/0.wav sherpa-onnx-nemo-ctc-en-conformer-small/test_wavs/1.wav
+
+      - name: Download the Urdu and Hindi models
+        run: |
+          mkdir -p models/ur models/hi
+          curl -fSL -o models/tokens.txt "$HF/tokens.txt"
+          curl -fSL -o models/ur/model.int8.onnx "$HF/ur/model.int8.onnx"
+          curl -fSL -o models/hi/model.int8.onnx "$HF/hi/model.int8.onnx"
+          ls -la models models/ur models/hi
+          head -5 models/tokens.txt; tail -3 models/tokens.txt; wc -l models/tokens.txt
+
+      - name: Fetch real speech clips (FLEURS test set)
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg jq > /dev/null
+          : > refs.tsv
+          for cfg in ur_pk hi_in te_in ta_in; do
+            mkdir -p clips/$cfg
+            ok=""
+            for attempt in 1 2 3; do
+              if curl -fsSL "https://datasets-server.huggingface.co/rows?dataset=google%2Ffleurs&config=$cfg&split=test&offset=0&length=25" -o clips/$cfg/rows.json; then ok=1; break; fi
+              sleep 15
+            done
+            if [ -z "$ok" ]; then echo "no rows for $cfg"; continue; fi
+            jq -r '.rows[] | [.row_idx, .row.audio[0].src, (.row.transcription // .row.raw_transcription)] | @tsv' clips/$cfg/rows.json > clips/$cfg/list.tsv || true
+            while IFS=$'\t' read -r idx src text; do
+              if curl -fsSL "$src" -o clips/$cfg/$idx.src && ffmpeg -loglevel error -y -i clips/$cfg/$idx.src -ar 16000 -ac 1 -sample_fmt s16 clips/$cfg/$idx.wav; then
+                printf 'REFERENCE\tclips/%s/%s.wav\t%s\n' "$cfg" "$idx" "$text" >> refs.tsv
+              fi
+              rm -f clips/$cfg/$idx.src
+            done < clips/$cfg/list.tsv
+          done
+          wc -l refs.tsv
+
+      - name: Download the Telugu and Tamil models
+        continue-on-error: true
+        run: |
+          mkdir -p models/te models/ta
+          curl -fSL -o models/te/model.int8.onnx "$HF/te/model.int8.onnx"
+          curl -fSL -o models/ta/model.int8.onnx "$HF/ta/model.int8.onnx"
+
+      - name: Recognize with IndicConformer
+        run: |
+          shopt -s nullglob
+          : > indic.tsv
+          for pair in ur:ur_pk hi:hi_in te:te_in ta:ta_in; do
+            lang=${pair%%:*}; cfg=${pair##*:}
+            clips=(clips/$cfg/*.wav)
+            if [ ${#clips[@]} -gt 0 ] && [ -s models/$lang/model.int8.onnx ]; then
+              java -cp out:lib/onnxruntime.jar AsrCheck models/$lang/model.int8.onnx models/tokens.txt "${clips[@]}" | tee -a indic.tsv
+            fi
+          done
+
+      - name: Recognize with Whisper small (what the app uses today)
+        continue-on-error: true
+        run: |
+          shopt -s nullglob
+          pip install -q faster-whisper
+          : > whisper.tsv
+          for pair in ur:ur_pk hi:hi_in te:te_in ta:ta_in; do
+            lang=${pair%%:*}; cfg=${pair##*:}
+            clips=(clips/$cfg/*.wav)
+            if [ ${#clips[@]} -gt 0 ]; then
+              python3 tools/asr-check/whisper_baseline.py $lang "${clips[@]}" | tee -a whisper.tsv
+            fi
+          done
+
+      - name: Scores
+        run: |
+          touch refs.tsv indic.tsv whisper.tsv
+          python3 tools/asr-check/score.py refs.tsv indic.tsv whisper.tsv

@@ -239,6 +239,16 @@
     <string name="preference_description_languages_quality">It allow to also supports languages that have low translation or speech recognition quality</string>
     <string name="preference_description_show_original_transcription_msg_preference">It allows to show the original transcription beyond the translation of the message.</string>
     <string name="preference_description_support_tts_quality">It allow to also supports languages that have a low quality speech synthesizer</string>
+    <string name="preference_header_indic_speech">Better listening for Indian languages</string>
+    <string name="preference_title_indic_speech_hindi">Hindi</string>
+    <string name="preference_title_indic_speech_urdu">Urdu</string>
+    <string name="preference_title_indic_speech_telugu">Telugu</string>
+    <string name="preference_title_indic_speech_tamil">Tamil</string>
+    <string name="preference_description_indic_speech">Listen with a speech model built for Indian languages. Downloads about 200 MB the first time.</string>
+    <string name="preference_indic_speech_downloading">Downloading the listening model: %1$d%%</string>
+    <string name="preference_indic_speech_ready">The listening model is ready</string>
+    <string name="preference_indic_speech_failed">The download failed. Check your connection and try again.</string>
+    <string name="preference_indic_speech_wait">Another listening model is downloading. Try again when it has finished.</string>
     <string name="preference_title_streaming_speech">Speak while translating</string>
     <string name="preference_description_streaming_speech">In WalkieTalkie mode, speak each phrase as soon as it is translated instead of waiting for the whole sentence</string>
     <string name="preference_description_tts">System settings of tts, an eventual change of the preferred engine will be applied only after the restart of the app</string>
