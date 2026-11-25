@@ -1,0 +1,91 @@
+name: Speech model check
+
+# Runs the Indian language speech model outside the app, on real audio clips,
+# so its accuracy can be checked without a phone.
+
+on:
+  push:
+    branches: ["experiment/**"]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SRC: app/src/main/java/nie/translator/rtranslator/voice_translation/neural_networks/voice/indic
+      HF: https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/main
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Get ONNX Runtime for desktop Java
+        run: |
+          mkdir -p lib
+          for v in 1.30.0 1.24.1 1.22.0 1.20.0; do
+            if curl -fsSL -o lib/onnxruntime.jar "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime/$v/onnxruntime-$v.jar"; then
+              echo "Using ONNX Runtime $v"; break
+            fi
+          done
+          test -s lib/onnxruntime.jar
+
+      - name: Compile
+        run: |
+          mkdir -p out
+          javac -encoding UTF-8 -cp lib/onnxruntime.jar -d out $SRC/*.java tools/asr-check/AsrCheck.java
+
+      - name: Validate the pipeline on a reference English model
+        run: |
+          curl -fsSL -o en.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-ctc-en-conformer-small.tar.bz2
+          tar xf en.tar.bz2
+          ls -la sherpa-onnx-nemo-ctc-en-conformer-small sherpa-onnx-nemo-ctc-en-conformer-small/test_wavs
+          echo "=== EXPECTED ==="
+          cat sherpa-onnx-nemo-ctc-en-conformer-small/test_wavs/trans.txt || true
+          echo "=== GOT ==="
+          M=sherpa-onnx-nemo-ctc-en-conformer-small/model.int8.onnx
+          test -f "$M" || M=sherpa-onnx-nemo-ctc-en-conformer-small/model.onnx
+          java -cp out:lib/onnxruntime.jar AsrCheck "$M" sherpa-onnx-nemo-ctc-en-conformer-small/tokens.txt sherpa-onnx-nemo-ctc-en-conformer-small/test_wavs/*.wav
+
+      - name: Download the Urdu and Hindi models
+        run: |
+          mkdir -p models/ur models/hi
+          curl -fSL -o models/tokens.txt "$HF/tokens.txt"
+          curl -fSL -o models/ur/model.int8.onnx "$HF/ur/model.int8.onnx"
+          curl -fSL -o models/hi/model.int8.onnx "$HF/hi/model.int8.onnx"
+          ls -la models models/ur models/hi
+          head -5 models/tokens.txt; tail -3 models/tokens.txt; wc -l models/tokens.txt
+
+      - name: Fetch real speech clips (FLEURS test set)
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg jq espeak-ng > /dev/null
+          for cfg in ur_pk hi_in; do
+            mkdir -p clips/$cfg
+            curl -fsSL "https://datasets-server.huggingface.co/rows?dataset=google%2Ffleurs&config=$cfg&split=test&offset=0&length=8" -o clips/$cfg/rows.json || { echo "no rows for $cfg"; continue; }
+            jq -r '.rows[] | [.row_idx, .row.audio[0].src, (.row.transcription // .row.raw_transcription)] | @tsv' clips/$cfg/rows.json > clips/$cfg/list.tsv || true
+            while IFS=$'\t' read -r idx src text; do
+              curl -fsSL "$src" -o clips/$cfg/$idx.src && ffmpeg -loglevel error -y -i clips/$cfg/$idx.src -ar 16000 -ac 1 -sample_fmt s16 clips/$cfg/$idx.wav || true
+              echo "REFERENCE	clips/$cfg/$idx.wav	$text"
+            done < clips/$cfg/list.tsv
+          done
+          # short synthetic phrases, robotic but useful for the two word case
+          mkdir -p clips/synth
+          espeak-ng -v ur "کل صبح" -w clips/synth/ur_kal_subah.raw.wav || true
+          espeak-ng -v ur "میں کل صبح دفتر آؤں گا" -w clips/synth/ur_sentence.raw.wav || true
+          espeak-ng -v hi "कल सुबह" -w clips/synth/hi_kal_subah.raw.wav || true
+          for f in clips/synth/*.raw.wav; do ffmpeg -loglevel error -y -i "$f" -ar 16000 -ac 1 -sample_fmt s16 "${f%.raw.wav}.wav" || true; rm -f "$f"; done
+          ls -la clips/*
+
+      - name: Recognize Urdu
+        run: |
+          shopt -s nullglob
+          java -cp out:lib/onnxruntime.jar AsrCheck models/ur/model.int8.onnx models/tokens.txt clips/ur_pk/*.wav clips/synth/ur_*.wav
+
+      - name: Recognize Hindi
+        run: |
+          shopt -s nullglob
+          java -cp out:lib/onnxruntime.jar AsrCheck models/hi/model.int8.onnx models/tokens.txt clips/hi_in/*.wav clips/synth/hi_*.wav
