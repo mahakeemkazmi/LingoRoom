@@ -22,8 +22,8 @@
         <item name="colorBackgroundColoredDialog">@color/primary_very_lite</item>
         <item name="colorBackgroundDialog">@color/accent_white</item>
 
-        <item name="colorBackgroundMessageSend">@color/secondary_very_lite</item>
-        <item name="colorBackgroundMessageReceived">@color/primary_very_lite</item>
+        <item name="colorBackgroundMessageSend">@color/primary_very_lite</item>
+        <item name="colorBackgroundMessageReceived">@color/secondary_very_lite</item>
 
         <item name="colorTextLevel0">@color/brand_navy</item>
         <item name="colorTextLevel1">@color/brand_navy</item>

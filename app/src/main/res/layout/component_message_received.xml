@@ -18,116 +18,96 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tool="http://schemas.android.com/tools"
-    android:layout_width="wrap_content"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_gravity="start"
-    android:paddingStart="0dp"
-    android:paddingEnd="80dp">
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp">
 
-    <!-- The length of the relative layout will stretch its width based on the content,
-         filling the entire screen as its maximum.
-         The cardView will stretch based on its content, to a maximum that is the
-         width of the screen -80dp (thanks to the relative layout paddingEnd).
-     -->
-
+    <!-- One message of a conversation: who spoke, what they said, its translation, and a button to hear it.
+         The second speaker, in the secondary colour. -->
     <androidx.cardview.widget.CardView
         android:id="@+id/cardContainer"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:theme="@style/ThemeOverlay.AppCompat.Light"
         android:backgroundTint="?attr/colorBackgroundMessageReceived"
         android:visibility="visible"
-        app:cardCornerRadius="24sp"
+        app:cardCornerRadius="18dp"
         app:cardElevation="0dp"
-        app:cardUseCompatPadding="true"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.037"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:cardUseCompatPadding="true">
 
-        <!-- In Linear Layout, when the parent has wrap_content width and the
-             children have match_parent width, the width will behave in this way:
-             The parent will stretch to the width of the longest children or to its maximum
-             possible width based on the surrounding constraints.
-             All the children will stretch to the width of the parent (except for the one with
-             max length, which will grow based on its content (or the parent max length).
-        -->
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="10dp">
 
-            <TextView
-                android:id="@+id/text_sender"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
-                android:layout_marginTop="4dp"
-                android:layout_marginEnd="16dp"
-                android:fontFamily="sans-serif"
-                android:textColor="?attr/colorPrimary"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:visibility="visible"
-                tool:text="Alice" />
-
-            <TextView
-                android:id="@+id/original_text_to_be_translated"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
-                android:layout_marginTop="12dp"
-                android:layout_marginEnd="16dp"
-                android:layout_marginBottom="12dp"
-                android:textAppearance="@style/TextAppearance.AppCompat.Large"
-                android:textSize="16sp"
-                android:textColor="?attr/colorTextLevel4"
-                android:visibility="visible"
-                tool:text="Original text to be translated"/>
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginTop="2dp"
+                android:layout_marginEnd="12dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/speaker_person_icon"
+                app:tint="@color/secondary_dark" />
 
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="0dp"
-                android:layout_marginTop="0dp"
-                android:layout_marginEnd="0dp"
-                android:layout_marginBottom="0dp"
-                android:orientation="horizontal"
-                android:visibility="visible">
+                android:layout_weight="1"
+                android:orientation="vertical">
 
-                <!-- 0dp and weight=1 pushes the button to the edge -->
+                <TextView
+                    android:id="@+id/text_sender"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="2dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:textColor="@color/secondary_dark"
+                    android:textSize="12sp"
+                    android:visibility="visible"
+                    tool:text="Alice" />
+
+                <TextView
+                    android:id="@+id/original_text_to_be_translated"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:lineSpacingMultiplier="1.15"
+                    android:textColor="?attr/colorTextLevel1"
+                    android:textSize="18sp"
+                    android:visibility="visible"
+                    tool:text="What was said, in the speaker\'s language" />
+
                 <TextView
                     android:id="@+id/text"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginTop="8dp"
-                    android:layout_marginEnd="16dp"
-                    android:layout_marginBottom="8dp"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Large"
-                    android:textColor="?attr/colorTextLevel1"
+                    android:fontFamily="sans-serif"
+                    android:lineSpacingMultiplier="1.15"
+                    android:textColor="?attr/colorTextLevel2"
                     android:textSize="16sp"
-                    tool:text="Ciao, come stai?"
-                    android:layout_gravity="center_vertical"/>
-
-                <com.google.android.material.floatingactionbutton.FloatingActionButton
-                    android:id="@+id/tts_button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:backgroundTint="?attr/colorBackgroundMessageReceived"
-                    android:src="@drawable/sound_icon"
-                    app:borderWidth="0dp"
-                    app:elevation="0dp"
-                    app:fabSize="mini"
-                    android:alpha="1"
-                    android:visibility="visible"
-                    app:rippleColor="#12000000"
-                    app:tint="?attr/colorTextLevel3"
-                    android:layout_gravity="center_vertical"
-                    android:importantForAccessibility="no"/>
+                    tool:text="The translation" />
             </LinearLayout>
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/tts_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:alpha="1"
+                android:backgroundTint="?attr/colorBackgroundMessageReceived"
+                android:importantForAccessibility="no"
+                android:src="@drawable/sound_icon"
+                android:visibility="visible"
+                app:borderWidth="0dp"
+                app:elevation="0dp"
+                app:fabSize="mini"
+                app:rippleColor="#12000000"
+                app:tint="@color/secondary_dark" />
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 </RelativeLayout>

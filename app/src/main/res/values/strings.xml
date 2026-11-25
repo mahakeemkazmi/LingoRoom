@@ -29,7 +29,7 @@
     <string name="not_available">not available</string>
     <string name="loading">loading…</string>
     <string name="forward">forward</string>
-    <string name="conversation">Conversation</string>
+    <string name="conversation">Group Conversation</string>
     <string name="connection">Connection</string>
     <string name="translate">Translate</string>
     <string name="fix">fix</string>
@@ -101,7 +101,7 @@
     <string name="description_start_download">Start download</string>
     <string name="description_delete_resource">Delete resource</string>
     <string name="description_download_error">Download error</string>
-    <string name="description_start_walkietalkie">Start WalkieTalkie</string>
+    <string name="description_start_walkietalkie">Start Conversation</string>
     <string name="description_manage_mozilla_button">Manage performance mode languages</string>
 
     <string name="notification_channel_name">use in background notification</string>
@@ -134,14 +134,14 @@
     <string name="hint_user_name">Name</string>
     <string name="hint_text">Insert text</string>
 
-    <string name="error_missing_location_permissions">It is not possible to use the Conversation mode without location and bluetooth permissions, go to the settings to grant them, or reinstall the app</string>
+    <string name="error_missing_location_permissions">It is not possible to use the Group Conversation mode without location and bluetooth permissions, go to the settings to grant them, or reinstall the app</string>
     <string name="error_missing_mic_permissions">Without the microphone permission the voice recognition does not work, go to the settings to grant the permission or reinstall the app</string>
-    <string name="error_missing_mic_permissions_walkietalkie">It is not possible to use the WalkieTalkie mode without microphone permission, go to the settings to grant it, or reinstall the app</string>
+    <string name="error_missing_mic_permissions_walkietalkie">It is not possible to use the Conversation mode without microphone permission, go to the settings to grant it, or reinstall the app</string>
     <string name="error_tts_toast">Missing tts</string>
     <string name="error_tts_voice_missing">No %1$s voice is installed, so it cannot be spoken. Add one in Settings, Text to Speech.</string>
     <string name="error_tts">There was an error with the tts initialization, do you want to continue without tts?</string>
     <string name="error_missing_tts">In this device there is no google tts engine, download it to be able to use the tts</string>
-    <string name="error_missing_bluetooth_le">It is not possible to use the Conversation mode because this device does not have Bluetooth Low Energy</string>
+    <string name="error_missing_bluetooth_le">It is not possible to use the Group Conversation mode because this device does not have Bluetooth Low Energy</string>
     <string name="error_internet_lack_loading">To start Lingo Room an internet connection is required, check your connection</string>
     <string name="error_internet_lack_accessing">To perform the operation an internet connection is required, check your connection</string>
     <string name="error_internet_lack_services">Unable to translate message, check internet connection</string>
@@ -167,19 +167,19 @@
     <string name="error_missing_mozilla">You selected Mozilla as a translation model, but you haven\'t downloaded any of its language yet. Please download at least one language model before selecting Mozilla.</string>
     <string name="error_missing_hy">You selected HY-MT as a translation model, but it hasn\'t been downloaded yet. Please download the model before selecting it.</string>
     <string name="error_missing_madlad">You selected Madlad as a translation model, but it hasn\'t been downloaded yet. Please download the model before selecting it.</string>
-    <string name="error_missing_mozilla_voice">You enabled the use of Mozilla models for WalkieTalkie and Conversation modes, but there are no downloaded Mozilla models. Please download them before enabling this option.</string>
+    <string name="error_missing_mozilla_voice">You enabled the use of Mozilla models for Conversation and Group Conversation modes, but there are no downloaded Mozilla models. Please download them before enabling this option.</string>
     <string name="error_missing_tatoeba">You enabled Tatoeba but it hasn\'t been downloaded yet. Please download Tatoeba before enabling it.</string>
     <string name="error_missing_general">Missing resource download</string>
     <string name="error_apply_unknown">Unknown error, please retry.</string>
     <string name="error_delete_last_download">This is the last downloaded translation model, you cannot delete all the translation models, please download another translation model before deleting this one.</string>
-    <string name="error_bluetooth_off">It is not possible to use the Conversation mode because Bluetooth is turned off, please turn it on to start using this mode.</string>
+    <string name="error_bluetooth_off">It is not possible to use the Group Conversation mode because Bluetooth is turned off, please turn it on to start using this mode.</string>
 
     <string name="title_image_selector">user image</string>
 
-    <string name="home_walkietalkie_mode">WalkieTalkie Mode</string>
-    <string name="home_conversation_mode">Conversation Mode</string>
-    <string name="title_fragment_conversation">Conversation</string>
-    <string name="title_fragment_walkie_talkie">WalkieTalkie</string>
+    <string name="home_walkietalkie_mode">Conversation Mode</string>
+    <string name="home_conversation_mode">Group Conversation Mode</string>
+    <string name="title_fragment_conversation">Group Conversation</string>
+    <string name="title_fragment_walkie_talkie">Conversation</string>
     <string name="title_fragment_notice">Notice</string>
     <string name="title_fragment_user_data">Insert your data</string>
     <string name="title_fragment_download">Download of models</string>
@@ -197,10 +197,9 @@
         to be able to establish a connection with them and start the conversation</string>
     <string name="description_fragment_user_data">Your name will be displayed by all nearby devices, while your profile picture will only be shown on devices with which you have already had conversations</string>
     <string name="description_fragment_download">Now Lingo Room will download the neural network models necessary for translation and speech recognition, once finished you can start using the app (even offline).</string>
-    <string name="description_conversation">The Conversation mode is the main feature of Lingo Room, it allows you to translate a conversation between several people in real time, for a better experience it is recommended to connect bluetooth headphones to the phone,
+    <string name="description_conversation">The Group Conversation mode is the main feature of Lingo Room, it allows you to translate a conversation between several people in real time, for a better experience it is recommended to connect bluetooth headphones to the phone,
         furthermore the application will continue to work also in background and with the phone on standby (however, some phones may have performance issues when the app runs in the background)</string>
-    <string name="description_walkie_talkie">WalkieTalkie mode is the secondary functionality of Lingo Room, it does not allow real-time translation but is designed to work with just one phone,
-        it automatically detects and translates a speech in a language into another language, and the application will continue to work in background and with the phone on standby</string>
+    <string name="description_walkie_talkie">Conversation mode translates a face to face conversation on one phone. Speak in either language and the other person hears the translation.</string>
     <string name="description_notice">Lingo Room uses <a href="https://openai.com/index/whisper/">OpenAi\'s Whisper</a> for speech recognition and <a href="https://ai.meta.com/research/no-language-left-behind/">Meta\'s NLLB</a> for translations, these models require quite a bit of power and at least 6GB of RAM to run, so make sure you\'re using a modern smartphone to avoid slowdowns or crashes. Lingo Room is built on the open source RTranslator project, which you can find <a href="https://github.com/niedev/RTranslator">here</a></string>
     <string name="description_download">Downloading %1$s</string>
     <string name="description_transfer">Transferring %1$s in internal memory</string>
@@ -208,13 +207,13 @@
     <string name="description_integrity_check">Checking integrity of %1$s</string>
     <string name="description_tts">To speak, Lingo Room uses the system\'s default TTS engine, the recommended TTS is the <a href="https://play.google.com/store/apps/details?id=com.google.android.tts">Google TTS</a>, but you can choose the one you prefer, to select it, click on the button below</string>
     <string name="description_permission_notification">Notifications will be used only to improve background operations like the downloads or other background tasks. This app will never send notifications.</string>
-    <string name="description_permission_pairing">To use Conversation mode, allow Lingo Room to use Bluetooth.</string>
-    <string name="description_permission_walkietalkie">To use WalkieTalkie mode, allow Lingo Room to access your microphone.</string>
-    <string name="description_permission_conversation">To translate your voice in Conversation mode, allow Lingo Room to access your microphone. If you don\'t grant this permission, the mode will still work, but you will only be able to send text messages or receive and play translations.</string>
+    <string name="description_permission_pairing">To use Group Conversation mode, allow Lingo Room to use Bluetooth.</string>
+    <string name="description_permission_walkietalkie">To use Conversation mode, allow Lingo Room to access your microphone.</string>
+    <string name="description_permission_conversation">To translate your voice in Group Conversation mode, allow Lingo Room to access your microphone. If you don\'t grant this permission, the mode will still work, but you will only be able to send text messages or receive and play translations.</string>
     <string name="description_model_mozilla">Mono language lightweight models created by Mozilla; they have a similar quality to 2024\'s Google Translate. \n\nModel: Mozilla 16-60M fp32</string>
     <string name="description_model_hy">Middleweight model created by Tencent; it has the best quality, better than Google Translate, comparable to Deepseek v3 and Gemini 3.0. \n\nModel: HY-MT-1.5 1.8B int8</string>
     <string name="description_model_madlad">Heavy model created by Google; it has a quality in-between the Mozilla and HY-MT models but supports 400 languages. \n\nModel: Madlad 3B int4</string>
-    <string name="description_mozilla_voice">Use peformance models (Mozilla) for WalkieTalkie and Conversation modes to reduce latency in Real-Time translation modes, but with worse quality.</string>
+    <string name="description_mozilla_voice">Use peformance models (Mozilla) for Conversation and Group Conversation modes to reduce latency in Real-Time translation modes, but with worse quality.</string>
     <string name="description_whisper_ram_reduction">Reduce RAM consumption of Whisper model from 900MB to 500MB, but reduces its execution speed by 24%.</string>
     <string name="description_tatoeba">Tatoeba dataset that will be used to improve the translation of some sentences</string>
     <string name="description_dictionaries">Translation dictionaries that will be used to improve the translation of single words.</string>
@@ -250,16 +249,16 @@
     <string name="preference_indic_speech_failed">The download failed. Check your connection and try again.</string>
     <string name="preference_indic_speech_wait">Another listening model is downloading. Try again when it has finished.</string>
     <string name="preference_title_streaming_speech">Speak while translating</string>
-    <string name="preference_description_streaming_speech">In WalkieTalkie mode, speak each phrase as soon as it is translated instead of waiting for the whole sentence</string>
+    <string name="preference_description_streaming_speech">In Conversation mode, speak each phrase as soon as it is translated instead of waiting for the whole sentence</string>
     <string name="preference_description_tts">System settings of tts, an eventual change of the preferred engine will be applied only after the restart of the app</string>
     <string name="preference_description_speech_timeout">Select the time after you stop talking to send the transcribed text</string>
     <string name="preference_description_prev_voice_duration">Select the length of the recording before you start speaking that will be included in the voice recognition</string>
     <string name="preference_description_beam_size">Set the beam size of the beam search algorithm, to improve translation quality at the expense of speed (only for text translation)</string>
     <string name="preference_description_models_manager">Choose the model you want to use for translation and manage other translation options</string>
 
-    <string name="conversation_mode" >Conversation</string>
-    <string name="conversation_mode_running" >Conversation mode is running...</string>
-    <string name="walkietalkie_mode" >WalkieTalkie</string>
-    <string name="walkietalkie_mode_running" >WalkieTalkie mode is running...</string>
+    <string name="conversation_mode" >Group Conversation</string>
+    <string name="conversation_mode_running" >Group Conversation mode is running...</string>
+    <string name="walkietalkie_mode" >Conversation</string>
+    <string name="walkietalkie_mode_running" >Conversation mode is running...</string>
 
 </resources>
