@@ -26,11 +26,12 @@ jobs:
       - name: Get ONNX Runtime for desktop Java
         run: |
           mkdir -p lib
-          for v in 1.30.0 1.24.1 1.22.0 1.20.0; do
-            if curl -fsSL -o lib/onnxruntime.jar "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime/$v/onnxruntime-$v.jar"; then
+          for v in 1.30.0 1.24.1 1.23.2 1.22.0 1.20.0; do
+            if mvn -q -B dependency:copy -Dartifact=com.microsoft.onnxruntime:onnxruntime:$v -DoutputDirectory=lib -Dmdep.stripVersion=true; then
               echo "Using ONNX Runtime $v"; break
             fi
           done
+          ls -la lib
           test -s lib/onnxruntime.jar
 
       - name: Compile
