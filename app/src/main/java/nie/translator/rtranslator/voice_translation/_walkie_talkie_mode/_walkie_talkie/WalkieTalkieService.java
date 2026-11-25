@@ -38,6 +38,7 @@ import nie.translator.rtranslator.tools.CustomLocale;
 import nie.translator.rtranslator.tools.ErrorCodes;
 import nie.translator.rtranslator.tools.Tools;
 import nie.translator.rtranslator.tools.gui.messages.GuiMessage;
+import nie.translator.rtranslator.voice_translation.SpokenLanguagePicker;
 import nie.translator.rtranslator.voice_translation.StreamingSpeechChunker;
 import nie.translator.rtranslator.voice_translation.VoiceTranslationService;
 import nie.translator.rtranslator.voice_translation.neural_networks.NeuralNetworkApiResult;
@@ -81,6 +82,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
     private CustomLocale secondLanguage;
     private Translator.TranslateListener firstResultTranslateListener;
     private Translator.TranslateListener secondResultTranslateListener;
+    private volatile double firstLanguageAudioProbability = -1;   // from the last automatic recognition, -1 if unknown
     // streaming speech (the translation is spoken phrase by phrase while it is generated)
     private final StreamingSpeechChunker speechChunker = new StreamingSpeechChunker();
     private final Object speechStreamLock = new Object();
@@ -303,6 +305,11 @@ public class WalkieTalkieService extends VoiceTranslationService {
             }
         };
         speechRecognizerCallback = new RecognizerMultiListener() {
+            @Override
+            public void onSpeechLanguageProbability(double firstLanguageProbability) {
+                firstLanguageAudioProbability = firstLanguageProbability;
+            }
+
             @Override
             public void onSpeechRecognizedResult(String text1, String languageCode1, double confidenceScore1, String text2, String languageCode2, double confidenceScore2) {
                 NeuralNetworkApiResult firstResult = new NeuralNetworkApiResult(text1, confidenceScore1, true);
@@ -620,7 +627,8 @@ public class WalkieTalkieService extends VoiceTranslationService {
     }
 
     private void compareResultsConfidence(NeuralNetworkApiResult firstResult, NeuralNetworkApiResult secondResult) {
-        if (firstResult.getConfidenceScore() >= secondResult.getConfidenceScore()) {
+        // the text did not settle which language was spoken: we trust the sound of the audio first, then the confidence
+        if (SpokenLanguagePicker.isFirstLanguage(firstLanguageAudioProbability, firstResult.getConfidenceScore(), secondResult.getConfidenceScore())) {
             translate(firstResult.getText(), firstLanguage, secondLanguage, TRANSLATOR_BEAM_SIZE, false, firstResultTranslateListener);
         } else {
             translate(secondResult.getText(), secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
