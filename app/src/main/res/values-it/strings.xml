@@ -105,9 +105,9 @@
 
     <string name="privacy_check_box">Dichiaro di aver letto la <a href="https://github.com/niedev/RTranslator/blob/v2.00/privacy/Privacy_Policy_it.md">privacy policy</a></string>
 
-    <string name="toast_working_background">RTranslator funzionerà in background</string>
+    <string name="toast_working_background">Lingo Room funzionerà in background</string>
     <string name="toast_download_completed">Download completato</string>
-    <string name="toast_download_error">C\'è stato un errore col download, apri RTranslator per riprovare</string>
+    <string name="toast_download_error">C\'è stato un errore col download, apri Lingo Room per riprovare</string>
     <string name="toast_missing_notification_permission">Per far funzionare bene in background questa modalità, attivare le notifiche</string>
 
     <string name="dialog_confirm_delete">Conferma cancellazione</string>
@@ -138,7 +138,7 @@
     <string name="error_tts">C\'è stato un errore con l\'inizializzazione del tts, vuoi continuare senza tts?</string>
     <string name="error_missing_tts">In questo device non è presente il motore di sintesi vocale di google, scaricalo per poter usare il tts</string>
     <string name="error_missing_bluetooth_le">Non é possibile eseguire la modalità Conversazione perché questo dispositivo non ha il Bluetooth Low Energy</string>
-    <string name="error_internet_lack_loading">Per avviare RTranslator è necessaria una connessione a internet, controllare la propria connessione</string>
+    <string name="error_internet_lack_loading">Per avviare Lingo Room è necessaria una connessione a internet, controllare la propria connessione</string>
     <string name="error_internet_lack_accessing">Per eseguire l\'operazione è necessaria una connessione a internet, controllare la propria connessione</string>
     <string name="error_internet_lack_services">Impossibile tradurre il messaggio, controllare la connessione a internet</string>
     <string name="error_internet_lack_loading_languages">Per visualizzare le lingue è necessaria una connessione a internet, controllare la propria connessione e riprovare</string>
@@ -189,23 +189,23 @@
     <string name="header_found_peers">trovati</string>
     <string name="header_connected_peers">connessi</string>
 
-    <string name="description_discovery">In questa schermata si cercano e ci rendiamo visibili ad altri dispositivi che usano RTranslator
+    <string name="description_discovery">In questa schermata si cercano e ci rendiamo visibili ad altri dispositivi che usano Lingo Room
         per poter stabilire una connessione con loro e iniziare la conversazione</string>
     <string name="description_fragment_user_data">Il tuo nome verrà visualizzato da tutti i dispositivi nelle vicinanze, mentre la tua immagine del profilo solo dai dispositivi con cui hai già avuto conversazioni</string>
-    <string name="description_fragment_download">Adesso RTranslator scaricherà i modelli di reti neurali necessari per la traduzione e il riconoscimento vocale, una volta finito potrai iniziare a usare l\'app (anche offline).</string>
-    <string name="description_conversation">La modalità Conversazione è la funzionalità principale di RTranslator, permette di tradurre una conversazione tra più persone in tempo reale, per un\' esperienza migliore si consiglia di collegare delle cuffie bluetooth al telefono, inoltre l\' applicazione continuerà a funzionare anche in background e con il telefono in standby (alcuni telefoni però potrebbero avere problemi di prestazioni quando l\'app gira in background)</string>
-    <string name="description_walkie_talkie">La modalità WalkieTalkie è la funzionalità secondaria di RTranslator, non permette una traduzione in tempo reale ma è pensata per funzionare con un solo telefono,
+    <string name="description_fragment_download">Adesso Lingo Room scaricherà i modelli di reti neurali necessari per la traduzione e il riconoscimento vocale, una volta finito potrai iniziare a usare l\'app (anche offline).</string>
+    <string name="description_conversation">La modalità Conversazione è la funzionalità principale di Lingo Room, permette di tradurre una conversazione tra più persone in tempo reale, per un\' esperienza migliore si consiglia di collegare delle cuffie bluetooth al telefono, inoltre l\' applicazione continuerà a funzionare anche in background e con il telefono in standby (alcuni telefoni però potrebbero avere problemi di prestazioni quando l\'app gira in background)</string>
+    <string name="description_walkie_talkie">La modalità WalkieTalkie è la funzionalità secondaria di Lingo Room, non permette una traduzione in tempo reale ma è pensata per funzionare con un solo telefono,
         rileva e traduce automaticamente un discorso in una lingua nell\' altra, inoltre l\' applicazione continuerà a funzionare anche in background e con il telefono in standby</string>
-    <string name="description_notice">RTranslator usa <a href="https://openai.com/index/whisper/">OpenAi Whisper</a> per il riconoscimento vocale e <a href="https://ai.meta.com/research/no-language-left-behind/">Meta NLLB</a> per la traduzione, questi modelli richiedono abbastanza potenza e almeno 6GB di RAM per essere eseguiti, quindi assicurati di usare uno smartphone moderno per evitare rallentamenti o crash. Per più info su RTranslator visita il progetto GitHub dell\'app <a href="https://github.com/niedev/RTranslator">qui</a></string>
+    <string name="description_notice">Lingo Room usa <a href="https://openai.com/index/whisper/">OpenAi Whisper</a> per il riconoscimento vocale e <a href="https://ai.meta.com/research/no-language-left-behind/">Meta NLLB</a> per la traduzione, questi modelli richiedono abbastanza potenza e almeno 6GB di RAM per essere eseguiti, quindi assicurati di usare uno smartphone moderno per evitare rallentamenti o crash. Per più info su RTranslator visita il progetto GitHub dell\'app <a href="https://github.com/niedev/RTranslator">qui</a></string>
     <string name="description_download">Download di %1$s in corso</string>
     <string name="description_transfer">Trasferimento di %1$s nella memoria interna</string>
     <string name="description_unzip">Decompressione di %1$s</string>
     <string name="description_integrity_check">Verifica dell\'integrità di %1$s</string>
-    <string name="description_tts">Per parlare, RTranslator usa il TTS di sistema, il TTS consigliato è il <a href="https://play.google.com/store/apps/details?id=com.google.android.tts">TTS di Google</a>, ma puoi usare quello che preferisci, per selezionarlo clicca sul pulsante sotto</string>
+    <string name="description_tts">Per parlare, Lingo Room usa il TTS di sistema, il TTS consigliato è il <a href="https://play.google.com/store/apps/details?id=com.google.android.tts">TTS di Google</a>, ma puoi usare quello che preferisci, per selezionarlo clicca sul pulsante sotto</string>
     <string name="description_permission_notification">Le notifiche saranno usate solo per migliorare le operazioni in background, come i download o altre attività in background. Questa app non invierà mai notifiche.</string>
-    <string name="description_permission_pairing">Per usare la modalità Conversazione, consenti a RTranslator di usare il Bluetooth.</string>
-    <string name="description_permission_walkietalkie">Per usare la modalità WalkieTalkie, consenti a RTranslator di accedere al microfono.</string>
-    <string name="description_permission_conversation">Per tradurre la tua voce nella modalità Conversazione, consenti a RTranslator di accedere al microfono. Se non concedi questo permesso, la modalità funzionerà comunque, ma potrai solo inviare messaggi di testo o ricevere e riprodurre le traduzioni.</string>
+    <string name="description_permission_pairing">Per usare la modalità Conversazione, consenti a Lingo Room di usare il Bluetooth.</string>
+    <string name="description_permission_walkietalkie">Per usare la modalità WalkieTalkie, consenti a Lingo Room di accedere al microfono.</string>
+    <string name="description_permission_conversation">Per tradurre la tua voce nella modalità Conversazione, consenti a Lingo Room di accedere al microfono. Se non concedi questo permesso, la modalità funzionerà comunque, ma potrai solo inviare messaggi di testo o ricevere e riprodurre le traduzioni.</string>
     <string name="description_model_mozilla">Modelli leggeri monolingua creati da Mozilla; hanno una qualità simile a quella di Google Translate del 2024. \n\nModello: Mozilla 16-60M fp32</string>
     <string name="description_model_hy">Modello di medie dimensioni creato da Tencent; ha la qualità migliore, superiore a Google Translate, paragonabile a Deepseek v3 e Gemini 3.0. \n\nModello: HY-MT-1.5 1.8B int8</string>
     <string name="description_model_madlad">Modello pesante creato da Google; ha una qualità intermedia tra i modelli Mozilla e HY-MT, ma supporta 400 lingue. \n\nModello: Madlad 3B int4</string>
