@@ -1,0 +1,59 @@
+name: Mirror speech models
+
+# Copies the Indian language speech model files into a release of this repository,
+# so the app downloads them from a place we control, and records their checksums.
+
+on:
+  push:
+    branches: ["models/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SOURCE: https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/main
+      TAG: indic-asr-v1
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download the model files
+        run: |
+          mkdir files && cd files
+          curl -fSL --retry 3 -o tokens.txt "$SOURCE/tokens.txt"
+          for lang in hi ur te ta; do
+            curl -fSL --retry 3 -o "indic-$lang.int8.onnx" "$SOURCE/$lang/model.int8.onnx"
+          done
+          ls -la
+          sha256sum * | tee ../SHA256SUMS
+
+      - name: Write the release notes
+        run: |
+          {
+            echo "Speech recognition models used by Lingo Room for Hindi, Urdu, Telugu and Tamil."
+            echo
+            echo "- Models: AI4Bharat IndicConformer (hybrid CTC and RNNT, large), CTC head only, int8 quantized ONNX"
+            echo "- Model licence: MIT, copyright AI4Bharat"
+            echo "- Conversion to ONNX: parismitaglobalsolutions/indicconformer-sherpa-onnx on Hugging Face"
+            echo "- These files are unmodified copies of that conversion"
+            echo
+            echo "SHA-256 checksums:"
+            echo
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+          } > notes.md
+          cat notes.md
+
+      - name: Publish the release
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" files/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+          else
+            gh release create "$TAG" files/* --repo "$GITHUB_REPOSITORY" --title "Indian language speech models v1" --notes-file notes.md --latest=false
+          fi
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | "ASSET \(.name) \(.size)"'
