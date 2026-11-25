@@ -142,7 +142,8 @@ public abstract class VoiceTranslationService extends GeneralService {
                 if(message != null) {
                     notifyTTSDone(String.valueOf(message.getMessageID()));
                 }
-                if(last) {
+                // if more speech of the same translation is still coming, the mic must stay off for now
+                if(last && !deferMicRestartForSpeechStream()) {
                     // start the task because this thread is not allowed to start the Recorder
                     mainHandler.postDelayed(new Runnable() {
                         @Override
@@ -280,6 +281,14 @@ public abstract class VoiceTranslationService extends GeneralService {
 
     protected boolean shouldDeactivateMicDuringTTS() {
         return true;
+    }
+
+    /**
+     * Called when the TTS has nothing left to speak. Subclasses that speak a translation in several parts
+     * return true while more parts are still expected, to take over restarting the mic themselves.
+     */
+    protected boolean deferMicRestartForSpeechStream() {
+        return false;
     }
 
     protected boolean isBluetoothHeadsetConnected() {
