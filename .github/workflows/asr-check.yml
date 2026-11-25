@@ -74,24 +74,10 @@ jobs:
       - name: Fetch real speech clips (FLEURS test set)
         continue-on-error: true
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg jq > /dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+          pip install -q pyarrow
           : > refs.tsv
-          for cfg in ur_pk hi_in te_in ta_in; do
-            mkdir -p clips/$cfg
-            ok=""
-            for attempt in 1 2 3; do
-              if curl -fsSL "https://datasets-server.huggingface.co/rows?dataset=google%2Ffleurs&config=$cfg&split=test&offset=0&length=25" -o clips/$cfg/rows.json; then ok=1; break; fi
-              sleep 15
-            done
-            if [ -z "$ok" ]; then echo "no rows for $cfg"; continue; fi
-            jq -r '.rows[] | [.row_idx, .row.audio[0].src, (.row.transcription // .row.raw_transcription)] | @tsv' clips/$cfg/rows.json > clips/$cfg/list.tsv || true
-            while IFS=$'\t' read -r idx src text; do
-              if curl -fsSL "$src" -o clips/$cfg/$idx.src && ffmpeg -loglevel error -y -i clips/$cfg/$idx.src -ar 16000 -ac 1 -sample_fmt s16 clips/$cfg/$idx.wav; then
-                printf 'REFERENCE\tclips/%s/%s.wav\t%s\n' "$cfg" "$idx" "$text" >> refs.tsv
-              fi
-              rm -f clips/$cfg/$idx.src
-            done < clips/$cfg/list.tsv
-          done
+          python3 tools/asr-check/fetch_fleurs.py 25 ur_pk hi_in te_in ta_in
           wc -l refs.tsv
 
       - name: Download the Telugu and Tamil models
