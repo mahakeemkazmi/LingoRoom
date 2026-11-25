@@ -16,22 +16,22 @@
     *-->
 
 <resources>
-    <color name="primary">#43a047</color>
-    <color name="primary_dark">#388e3c</color>
-    <color name="primary_very_dark">#296B2C</color>
-    <color name="primary_very_very_dark">#1D2123</color>
-    <color name="primary_very_very_dark_light">#262E27</color>
-    <color name="primary_lite">#5FAD63</color>
-    <color name="primary_very_lite">#E6F8E6</color>   <!-- #DEF8E0 -->  <!-- #E9FFE9-->
-    <color name="accent">#36b024</color>
-    <color name="secondary">#3785C3</color>
-    <color name="secondary_dark">#2F72A8</color>
-    <color name="secondary_very_dark">#1D4C71</color>
-    <color name="secondary_very_very_dark">#184949</color>
-    <color name="secondary_very_lite">#E0F2F1</color>
+    <color name="primary">#520380</color>
+    <color name="primary_dark">#3D0261</color>
+    <color name="primary_very_dark">#2B0145</color>
+    <color name="primary_very_very_dark">#1B1433</color>
+    <color name="primary_very_very_dark_light">#241A45</color>
+    <color name="primary_lite">#8E3FD6</color>
+    <color name="primary_very_lite">#F5F3FF</color>   <!-- #DEF8E0 -->  <!-- #E9FFE9-->
+    <color name="accent">#520380</color>
+    <color name="secondary">#00B4FF</color>
+    <color name="secondary_dark">#0090CC</color>
+    <color name="secondary_very_dark">#005F8A</color>
+    <color name="secondary_very_very_dark">#0C2A4A</color>
+    <color name="secondary_very_lite">#E6F7FF</color>
     <color name="secondaryTransparent">#320099cc</color>
-    <color name="background_discover">#5a43a047</color>
-    <color name="background_advertize">#5a43a047</color>
+    <color name="background_discover">#5A520380</color>
+    <color name="background_advertize">#5A520380</color>
     <color name="pressed_color">#cfd8dc</color>
     <color name="accent_black">#ff000000</color>
     <color name="dark_black">#06070A</color>
@@ -56,6 +56,12 @@
     <color name="blue">#6faffc</color>
     <color name="purple">#BA68C8</color>
     <color name="orange">#FF7043</color>
+    <!-- Lingo Room brand colours, see brand/README.md -->
+    <color name="brand_purple">#520380</color>
+    <color name="brand_blue">#00B4FF</color>
+    <color name="brand_yellow">#FFB025</color>
+    <color name="brand_lavender">#F5F3FF</color>
+    <color name="brand_navy">#171B38</color>
     <!-- colors for the widget-->
     <color name="widget_background">@color/primary_very_lite</color>
     <color name="widget_icon">@color/primary_very_dark</color>
