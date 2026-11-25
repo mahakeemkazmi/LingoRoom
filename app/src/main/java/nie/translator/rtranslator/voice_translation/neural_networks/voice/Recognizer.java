@@ -350,6 +350,7 @@ public class Recognizer extends NeuralNetworkApi {
                     ArrayList<Integer> completeOutput2 = new ArrayList<Integer>();
                     double outputProbability1 = 0;
                     double outputProbability2 = 0;
+                    double firstLanguageAudioProbability = -1;  // -1 means unknown
                     boolean finished1 = false;
                     boolean finished2 = false;
                     long initialTime;
@@ -457,6 +458,11 @@ public class Recognizer extends NeuralNetworkApi {
                         decoderOutput = (OnnxTensor) result.get("logits").get();
                         value = (float[][][]) decoderOutput.getValue();
                         outputValues = value[0][0];
+                        if(j == 1 && batchSize == 2 && languageID >= 0 && languageID2 >= 0) {
+                            // After the start token, the model predicts the language of the audio.
+                            // We keep how likely the first language is compared to the second, judged from the sound alone.
+                            firstLanguageAudioProbability = 1.0 / (1.0 + Math.exp(outputValues[languageID2] - outputValues[languageID]));
+                        }
                         if(!finished1) {
                             max = Utils.getIndexOfLargest(outputValues);
                             completeOutput.add(max);
@@ -566,6 +572,7 @@ public class Recognizer extends NeuralNetworkApi {
                         String alternativeSecondText = recognizeWithAlternative(data.data, data.languageCode2);
                         if (alternativeSecondText != null) secondText = alternativeSecondText;
 
+                        notifyMultiLanguageProbability(firstLanguageAudioProbability);
                         notifyMultiResult(correctText(firstText), data.languageCode, outputProbability1, correctText(secondText), data.languageCode2, outputProbability2);
                     }
                     //closing all results
@@ -709,6 +716,12 @@ public class Recognizer extends NeuralNetworkApi {
     private void notifyResult(String text, String languageCode, double confidenceScore, boolean isFinal) {
         for (int i = 0; i < callbacks.size(); i++) {
             callbacks.get(i).onSpeechRecognizedResult(text, languageCode, confidenceScore, isFinal);
+        }
+    }
+
+    private void notifyMultiLanguageProbability(double firstLanguageProbability) {
+        for (int i = 0; i < multiCallbacks.size(); i++) {
+            multiCallbacks.get(i).onSpeechLanguageProbability(firstLanguageProbability);
         }
     }
 

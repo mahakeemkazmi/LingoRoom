@@ -20,4 +20,10 @@ import nie.translator.rtranslator.voice_translation.neural_networks.NeuralNetwor
 
 public interface RecognizerMultiListener extends NeuralNetworkApiListener {
     void onSpeechRecognizedResult(String text1, String languageCode1, double confidenceScore1, String text2, String languageCode2, double confidenceScore2);
+
+    /**
+     * Called right before onSpeechRecognizedResult, with how likely it is, judged from the sound of the audio alone,
+     * that the first language was spoken rather than the second (from 0 to 1, or -1 if unknown).
+     */
+    default void onSpeechLanguageProbability(double firstLanguageProbability) {}
 }
