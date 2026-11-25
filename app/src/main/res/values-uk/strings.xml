@@ -87,7 +87,7 @@
 
     <string name="notification_channel_name">використання у фоновому режимі</string>
 
-    <string name="privacy_check_box">Я підтверджую, що я прочитав <a href="https://github.com/niedev/RTranslator/blob/v2.00/privacy/Privacy_Policy_en.md">політику конфіденційності</a></string>
+    <string name="privacy_check_box">Я підтверджую, що я прочитав <a href="https://github.com/mahakeemkazmi/LingoRoom/blob/v3.00/privacy/Privacy_Policy_en.md">політику конфіденційності</a></string>
 
     <string name="toast_working_background">Lingo Room буде працювати у фоновому режимі</string>
     <string name="toast_download_completed">Завантаження завершено</string>

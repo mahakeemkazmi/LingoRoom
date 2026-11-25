@@ -28,6 +28,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 
@@ -41,7 +42,9 @@ public class IndicSpeechEngine implements Recognizer.AlternativeRecognizer {
     /** The languages that can use IndicConformer (each one has its own model file of about 200 MB). */
     public static final String[] LANGUAGES = {"ur", "hi", "te", "ta"};
     private static final String TAG = "indicSpeech";
-    private static final String BASE_URL = "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/main/";
+    // our own copy of the model files, published by the "Mirror speech models" workflow of this repository
+    private static final String BASE_URL = "https://github.com/mahakeemkazmi/LingoRoom/releases/download/indic-asr-v1/";
+    private static final String TOKENS_SHA256 = "ee60967630213f31951817ac8b402b92ec18cce80718a24a49b388e56672dfb2";
     private static final long MIN_MODEL_BYTES = 100L * 1024 * 1024;   // a model is about 198 MB, anything much smaller is a broken download
     private static final long MIN_TOKENS_BYTES = 10L * 1024;
     private static final int THREADS = 4;
@@ -94,6 +97,17 @@ public class IndicSpeechEngine implements Recognizer.AlternativeRecognizer {
             case "te": return "indicSpeechTelugu";
             case "ta": return "indicSpeechTamil";
             default: return "indicSpeech_" + language;
+        }
+    }
+
+    /** @return the SHA-256 checksum of the model file of this language, used to check the download */
+    private static String modelSha256(String language) {
+        switch (language) {
+            case "ur": return "0239f1c371a38f7623f29a8d7bae79f91f16f58aba45ea67103630dbb425cb07";
+            case "hi": return "915c71e04dd7e5378a4057fdebb252b3a587188e4e99db6d7ce0909ad5ad05fa";
+            case "te": return "710f176e33080f1be84b4f38bb5f33be3f522dcf4f191bf4d5cc89f7a85924f3";
+            case "ta": return "abb7b59d706b8d27ba3fb5e5e3db7671c9e1a09bf7bc6122de507c60030e65fb";
+            default: return null;
         }
     }
 
@@ -226,10 +240,10 @@ public class IndicSpeechEngine implements Recognizer.AlternativeRecognizer {
                     File model = modelFile(appContext, language);
                     model.getParentFile().mkdirs();
                     if (tokens.length() < MIN_TOKENS_BYTES) {
-                        downloadFile(BASE_URL + "tokens.txt", tokens, null);
+                        downloadFile(BASE_URL + "tokens.txt", tokens, TOKENS_SHA256, null);
                     }
                     if (model.length() < MIN_MODEL_BYTES) {
-                        downloadFile(BASE_URL + language + "/model.int8.onnx", model, listener);
+                        downloadFile(BASE_URL + "indic-" + language + ".int8.onnx", model, modelSha256(language), listener);
                     }
                     success = isDownloaded(appContext, language);
                 } catch (Throwable error) {
@@ -245,7 +259,11 @@ public class IndicSpeechEngine implements Recognizer.AlternativeRecognizer {
         return true;
     }
 
-    private static void downloadFile(String address, File destination, @Nullable DownloadListener listener) throws Exception {
+    /**
+     * Downloads a file and saves it only if it is complete and, when a checksum is given, matches it.
+     */
+    private static void downloadFile(String address, File destination, @Nullable String expectedSha256, @Nullable DownloadListener listener) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
         File partial = new File(destination.getPath() + ".part");
         HttpURLConnection connection = (HttpURLConnection) new URL(address).openConnection();
         connection.setConnectTimeout(30000);
@@ -264,6 +282,7 @@ public class IndicSpeechEngine implements Recognizer.AlternativeRecognizer {
                 int read;
                 while ((read = input.read(buffer)) != -1) {
                     output.write(buffer, 0, read);
+                    digest.update(buffer, 0, read);
                     done += read;
                     if (total > 0) {
                         int percent = (int) (done * 100 / total);
@@ -279,6 +298,15 @@ public class IndicSpeechEngine implements Recognizer.AlternativeRecognizer {
             }
             if (total > 0 && partial.length() != total) {
                 throw new java.io.IOException("incomplete download of " + address);
+            }
+            if (expectedSha256 != null) {
+                StringBuilder actual = new StringBuilder();
+                for (byte b : digest.digest()) {
+                    actual.append(String.format("%02x", b));
+                }
+                if (!actual.toString().equals(expectedSha256)) {
+                    throw new java.io.IOException("checksum mismatch for " + address);
+                }
             }
             if (destination.exists() && !destination.delete()) {
                 throw new java.io.IOException("cannot replace " + destination);
