@@ -6,6 +6,12 @@ name: Speech model check
 on:
   push:
     branches: ["experiment/**"]
+    paths:
+      - "tools/asr-check/**"
+      - ".github/workflows/asr-check.yml"
+      - "app/src/main/java/nie/translator/rtranslator/voice_translation/neural_networks/voice/indic/NemoFeatureExtractor.java"
+      - "app/src/main/java/nie/translator/rtranslator/voice_translation/neural_networks/voice/indic/CtcTokenDecoder.java"
+      - "app/src/main/java/nie/translator/rtranslator/voice_translation/neural_networks/voice/indic/IndicConformerRecognizer.java"
   workflow_dispatch:
 
 jobs:
@@ -42,7 +48,7 @@ jobs:
       - name: Compile
         run: |
           mkdir -p out
-          javac -encoding UTF-8 -cp lib/onnxruntime.jar -d out $SRC/*.java tools/asr-check/AsrCheck.java
+          javac -encoding UTF-8 -cp lib/onnxruntime.jar -d out $SRC/NemoFeatureExtractor.java $SRC/CtcTokenDecoder.java $SRC/IndicConformerRecognizer.java tools/asr-check/AsrCheck.java
 
       - name: Validate the pipeline on a reference English model
         run: |
