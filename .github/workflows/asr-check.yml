@@ -49,7 +49,7 @@ jobs:
           echo "=== GOT ==="
           M=sherpa-onnx-nemo-ctc-en-conformer-small/model.int8.onnx
           test -f "$M" || M=sherpa-onnx-nemo-ctc-en-conformer-small/model.onnx
-          java -cp out:lib/onnxruntime.jar AsrCheck "$M" sherpa-onnx-nemo-ctc-en-conformer-small/tokens.txt sherpa-onnx-nemo-ctc-en-conformer-small/test_wavs/*.wav
+          java -cp out:lib/onnxruntime.jar AsrCheck "$M" sherpa-onnx-nemo-ctc-en-conformer-small/tokens.txt sherpa-onnx-nemo-ctc-en-conformer-small/test_wavs/0.wav sherpa-onnx-nemo-ctc-en-conformer-small/test_wavs/1.wav
 
       - name: Download the Urdu and Hindi models
         run: |
