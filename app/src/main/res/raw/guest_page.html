@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lingo Room</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font-family: Roboto, system-ui, sans-serif; background: #F5F3FF; color: #171B38; display: flex; flex-direction: column; }
+  header { background: #520380; color: #fff; padding: 14px 16px; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  header span.dot { width: 10px; height: 10px; border-radius: 50%; background: #FFB025; }
+  header span.dot.on { background: #00B4FF; }
+  #list { flex: 1; overflow-y: auto; padding: 12px; }
+  .msg { max-width: 88%; margin: 0 0 10px; padding: 10px 14px; border-radius: 16px; font-size: 19px; line-height: 1.35; word-wrap: break-word; }
+  .msg.them { background: #fff; border: 1px solid #E3DCF5; border-bottom-left-radius: 4px; margin-right: auto; }
+  .msg.me { background: #520380; color: #fff; border-bottom-right-radius: 4px; margin-left: auto; }
+  .msg.wait { opacity: .6; }
+  #hint { padding: 0 16px 6px; font-size: 14px; color: #5b5f7a; }
+  #bar { display: flex; gap: 8px; padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid #E3DCF5; align-items: flex-end; }
+  #text { flex: 1; font: inherit; font-size: 18px; padding: 10px 12px; border: 1px solid #C9BEE8; border-radius: 14px; resize: none; min-height: 46px; max-height: 120px; }
+  button { font: inherit; border: 0; border-radius: 14px; }
+  #send { background: #520380; color: #fff; font-weight: 700; font-size: 17px; padding: 0 16px; height: 46px; }
+  #aloud { background: transparent; color: #520380; font-size: 15px; padding: 6px 16px 10px; text-align: left; display: flex; align-items: center; gap: 8px; }
+  #aloud i { width: 38px; height: 22px; border-radius: 11px; background: #C9BEE8; position: relative; display: inline-block; }
+  #aloud i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; }
+  #aloud.on i { background: #00B4FF; }
+  #aloud.on i::after { left: 18px; }
+</style>
+</head>
+<body>
+<header><span class="dot" id="dot"></span>Lingo Room</header>
+<div id="list"></div>
+<button id="aloud" type="button"><i></i><span id="aloudText">Read aloud</span></button>
+<div id="hint">To speak, tap the microphone on your keyboard</div>
+<div id="bar">
+  <textarea id="text" rows="1" dir="auto" placeholder="Write your message here"></textarea>
+  <button id="send" type="button">Send</button>
+</div>
+<script>
+(function () {
+  var base = location.pathname.replace(/\/$/, "");
+  var list = document.getElementById("list");
+  var text = document.getElementById("text");
+  var send = document.getElementById("send");
+  var aloud = document.getElementById("aloud");
+  var dot = document.getElementById("dot");
+  var since = 0, language = "", readAloud = false, spoken = {}, rows = {}, pending = [];
+
+  function show(message) {
+    var row = rows[message.key];
+    if (!row) {
+      row = document.createElement("div");
+      row.dir = "auto";
+      rows[message.key] = row;
+      list.appendChild(row);
+    }
+    // what the host said is shown translated, what the guest said is shown as it was said
+    row.className = "msg " + (message.host ? "them" : "me") + (message.final ? "" : " wait");
+    row.textContent = message.host ? message.translated : message.original;
+    if (!message.host) {
+      for (var i = 0; i < pending.length; i++) {
+        if (pending[i].text === message.original) {
+          pending[i].row.remove();
+          pending.splice(i, 1);
+          break;
+        }
+      }
+    }
+    list.scrollTop = list.scrollHeight;
+    if (message.host && message.final && readAloud && !spoken[message.key] && window.speechSynthesis) {
+      spoken[message.key] = true;
+      var speech = new SpeechSynthesisUtterance(message.translated);
+      if (language) speech.lang = language;
+      window.speechSynthesis.speak(speech);
+    }
+  }
+
+  function poll() {
+    var request = new XMLHttpRequest();
+    request.open("GET", base + "/events?since=" + since);
+    request.timeout = 5000;
+    request.onload = function () {
+      try {
+        var data = JSON.parse(request.responseText);
+        dot.className = "dot on";
+        language = data.lang || "";
+        if (data.labels && data.labels.length >= 4) {
+          text.placeholder = data.labels[0];
+          send.textContent = data.labels[1];
+          document.getElementById("aloudText").textContent = data.labels[2];
+          document.getElementById("hint").textContent = data.labels[3];
+        }
+        if (data.rev < since) { since = 0; } else {
+          for (var i = 0; i < data.messages.length; i++) show(data.messages[i]);
+          since = data.rev;
+        }
+      } catch (error) {}
+      setTimeout(poll, 700);
+    };
+    request.onerror = request.ontimeout = function () {
+      dot.className = "dot";
+      setTimeout(poll, 1500);
+    };
+    request.send();
+  }
+
+  function sendText() {
+    var value = text.value.replace(/\s+/g, " ").trim();
+    if (!value) return;
+    text.value = "";
+    var row = document.createElement("div");
+    row.dir = "auto";
+    row.className = "msg me wait";
+    row.textContent = value;
+    list.appendChild(row);
+    list.scrollTop = list.scrollHeight;
+    pending.push({ text: value, row: row });
+    var request = new XMLHttpRequest();
+    request.open("POST", base + "/say");
+    request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
+    request.send(value);
+  }
+
+  send.addEventListener("click", sendText);
+  text.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendText(); }
+  });
+  aloud.addEventListener("click", function () {
+    readAloud = !readAloud;
+    aloud.className = readAloud ? "on" : "";
+    if (readAloud && window.speechSynthesis) {
+      // browsers only allow speech after a tap, this empty phrase unlocks it
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+    }
+  });
+  if (!window.speechSynthesis) aloud.style.display = "none";
+  poll();
+})();
+</script>
+</body>
+</html>

@@ -111,6 +111,20 @@
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/sound_manual_icon" />
 
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/guestButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:backgroundTint="@android:color/transparent"
+        android:tint="?attr/colorPrimaryStrong"
+        android:contentDescription="@string/guest_title"
+        app:layout_constraintBottom_toBottomOf="@id/toolbarWalkieTalkie"
+        app:layout_constraintEnd_toStartOf="@+id/soundButton"
+        app:layout_constraintHorizontal_bias="1.0"
+        app:layout_constraintStart_toStartOf="@+id/toolbarWalkieTalkie"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@drawable/guest_link_icon" />
+
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/constraintLayout"
         android:layout_width="match_parent"

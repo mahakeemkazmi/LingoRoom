@@ -35,6 +35,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatImageButton;
+import nie.translator.rtranslator.voice_translation.guest.GuestInviteDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.view.AccessibilityDelegateCompat;
@@ -178,6 +179,17 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
         // setting of the selected languages
         setFirstLanguage(global.getFirstLanguage(true));
         setSecondLanguage(global.getSecondLanguage(true));
+
+        View guestButton = requireView().findViewById(R.id.guestButton);
+        if (guestButton != null) {
+            guestButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    CustomLocale guestLanguage = global.getSecondLanguage(true);
+                    GuestInviteDialog.show(activity, guestLanguage == null ? "" : guestLanguage.getDisplayNameWithoutTTS());
+                }
+            });
+        }
 
         settingsButton.setOnClickListener(new View.OnClickListener() {
             @Override
