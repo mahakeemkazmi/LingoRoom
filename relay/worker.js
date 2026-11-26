@@ -3,7 +3,7 @@
 // over https so that the browser allows the microphone. It keeps no conversation data: it only forwards.
 import page from "./guest_page.html";
 
-const MAX_MESSAGE_BYTES = 256 * 1024;
+const MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
 const MAX_GUESTS = 2;
 const ROOM_LIFETIME_MS = 2 * 60 * 60 * 1000;
 

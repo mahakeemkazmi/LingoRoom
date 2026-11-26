@@ -59,6 +59,8 @@ public final class GuestSession {
     private static volatile RelayClient relay;
     private static volatile long relaySentRevision;
     private static String relayRoom;
+    private static GuestVoice voice;
+    private static volatile String speechLanguage = "";
     private static Host host;
 
     private GuestSession() {
@@ -107,6 +109,15 @@ public final class GuestSession {
             }
         });
         server = created;
+        voice = new GuestVoice(context, (key, wav) -> {
+            created.setAudio(key, wav);
+            RelayClient current = relay;
+            if (current != null && current.isOpen()) {
+                // over the internet the sound travels with the conversation: first its name, then the sound itself
+                current.send("{\"type\":\"audio\",\"key\":" + GuestServer.quote(key) + "}");
+                current.send(wav);
+            }
+        });
         if (host != null) {
             host.onGuestSessionStarted();
         }
@@ -195,6 +206,10 @@ public final class GuestSession {
             server.stop();
             server = null;
         }
+        if (voice != null) {
+            voice.shutdown();
+            voice = null;
+        }
     }
 
     public static synchronized boolean isActive() {
@@ -218,10 +233,14 @@ public final class GuestSession {
     public static synchronized void publish(String key, boolean hostSpoke, String original, String translated, boolean isFinal) {
         if (server != null) {
             server.publish(key, hostSpoke, original, translated, isFinal);
+            if (hostSpoke && isFinal && voice != null && !speechLanguage.isEmpty() && isGuestListening()) {
+                voice.synthesize(key, translated, speechLanguage);
+            }
         }
     }
 
     public static synchronized void setSpeechLanguage(String languageCode) {
+        speechLanguage = languageCode == null ? "" : languageCode;
         if (server != null) {
             server.setSpeechLanguage(languageCode);
         }
