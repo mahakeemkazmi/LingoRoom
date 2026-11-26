@@ -56,6 +56,7 @@ final class RelayClient {
     private volatile boolean open;
     private volatile boolean closed;
     private volatile long lastGuestContact;
+    private volatile long lastGuestListening;
 
     RelayClient(String url, Listener listener) {
         this.url = url;
@@ -80,6 +81,8 @@ final class RelayClient {
                     String type = json.optString("type");
                     if (type.equals("hello")) {
                         listener.onGuestJoined();
+                    } else if (type.equals("aloud")) {
+                        lastGuestListening = json.optBoolean("on") ? System.currentTimeMillis() : 0;
                     } else if (type.equals("say")) {
                         String said = json.optString("text").replaceAll("\\s+", " ").trim();
                         if (said.length() > 500) {
@@ -143,6 +146,11 @@ final class RelayClient {
 
     boolean isGuestConnected() {
         return System.currentTimeMillis() - lastGuestContact < 5 * 60 * 1000;
+    }
+
+    /** @return true if the page of the guest is reading the conversation aloud (it tells us every few seconds) */
+    boolean isGuestListening() {
+        return open && System.currentTimeMillis() - lastGuestListening < 12000;
     }
 
     synchronized void send(String text) {

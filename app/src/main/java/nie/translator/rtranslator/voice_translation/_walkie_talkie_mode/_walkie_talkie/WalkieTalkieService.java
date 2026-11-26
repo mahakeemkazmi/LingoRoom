@@ -469,9 +469,11 @@ public class WalkieTalkieService extends VoiceTranslationService {
      */
     private boolean speakStreaming(String textToTranslate, String translatedText, long resultID, boolean isMine, boolean isFinal, CustomLocale inputLanguage, CustomLocale outputLanguage, boolean languageHasVoice) {
         synchronized (speechStreamLock) {
-            boolean canSpeak = languageHasVoice && !isAudioMute && ttsEngine != null && ttsEngine.isActive();
+            // if the phone of a guest reads the conversation aloud, this phone stays silent for what its own user says
+            boolean guestHears = isMine && GuestSession.isGuestListening();
+            boolean canSpeak = languageHasVoice && !guestHears && !isAudioMute && ttsEngine != null && ttsEngine.isActive();
             if (!canSpeak) {
-                if (isFinal && !languageHasVoice && !isAudioMute) {
+                if (isFinal && !languageHasVoice && !guestHears && !isAudioMute) {
                     notifyVoiceMissing(outputLanguage);
                 }
                 boolean micWasLeftOff = speechStreamPending && (micRestartDeferred || ttsEngine == null || !ttsEngine.isBusy());

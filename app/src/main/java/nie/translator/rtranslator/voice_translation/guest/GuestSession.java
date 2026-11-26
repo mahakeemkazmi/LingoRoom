@@ -41,8 +41,9 @@ public final class GuestSession {
             "Write your message here",
             "Send",
             "Read aloud",
-            "To speak, tap the microphone on your keyboard",
-            "Hold the microphone to speak"
+            "To speak, tap the box below, then the microphone on your keyboard",
+            "Hold the microphone to speak",
+            "Tap here to hear the conversation"
     };
 
     public interface Host {
@@ -198,6 +199,20 @@ public final class GuestSession {
 
     public static synchronized boolean isActive() {
         return server != null;
+    }
+
+    /**
+     * @return true if the phone of a guest is reading the conversation aloud: this phone then does not need
+     * to speak the translation of what its own user says
+     */
+    public static boolean isGuestListening() {
+        GuestServer currentServer;
+        RelayClient currentRelay;
+        synchronized (GuestSession.class) {
+            currentServer = server;
+            currentRelay = relay;
+        }
+        return (currentServer != null && currentServer.isGuestListening()) || (currentRelay != null && currentRelay.isGuestListening());
     }
 
     public static synchronized void publish(String key, boolean hostSpoke, String original, String translated, boolean isFinal) {

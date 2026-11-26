@@ -264,6 +264,7 @@
     <string name="guest_steps_online">The other person does not need the app, only internet on their phone.\n\nThey scan this code with their camera. Then they hold the microphone button to speak in %1$s, or write.</string>
     <string name="guest_use_wifi">No internet</string>
     <string name="guest_use_internet">Use internet</string>
+    <string name="guest_description">Guest link is on.\n\nSpeak into this phone as usual. The middle microphone listens by itself. Your guest reads and hears your words on their own phone, and their replies are spoken here.</string>
     <string name="guest_done">Done</string>
     <string name="guest_end">End guest link</string>
     <string name="label_group_short">Group</string>

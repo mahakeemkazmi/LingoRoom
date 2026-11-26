@@ -16,7 +16,9 @@
   .msg.them { background: #fff; border: 1px solid #E3DCF5; border-bottom-left-radius: 4px; margin-right: auto; }
   .msg.me { background: #520380; color: #fff; border-bottom-right-radius: 4px; margin-left: auto; }
   .msg.wait { opacity: .6; }
-  #hint { padding: 0 16px 6px; font-size: 14px; color: #5b5f7a; }
+  #hint { margin: 0 12px 8px; padding: 8px 12px; font-size: 15px; color: #171B38; background: #E6F7FF; border-radius: 10px; }
+  #start { position: fixed; inset: 0; background: rgba(23, 27, 56, .82); display: none; align-items: center; justify-content: center; padding: 24px; }
+  #start button { background: #FFB025; color: #171B38; font-size: 22px; font-weight: 700; padding: 22px 26px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 320px; }
   #bar { display: flex; gap: 8px; padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid #E3DCF5; align-items: flex-end; }
   #text { flex: 1; font: inherit; font-size: 18px; padding: 10px 12px; border: 1px solid #C9BEE8; border-radius: 14px; resize: none; min-height: 46px; max-height: 120px; }
   button { font: inherit; border: 0; border-radius: 14px; }
@@ -34,12 +36,13 @@
 <header><span class="dot" id="dot"></span>Lingo Room</header>
 <div id="list"></div>
 <button id="aloud" type="button"><i></i><span id="aloudText">Read aloud</span></button>
-<div id="hint">To speak, tap the microphone on your keyboard</div>
+<div id="hint">To speak, tap the box below, then the microphone on your keyboard</div>
 <div id="bar">
   <textarea id="text" rows="1" dir="auto" placeholder="Write your message here"></textarea>
   <button id="mic" type="button" aria-label="Microphone"><svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M12,14c1.66,0 3,-1.34 3,-3V5c0,-1.66 -1.34,-3 -3,-3S9,3.34 9,5v6c0,1.66 1.34,3 3,3zM17.3,11c0,3 -2.54,5.1 -5.3,5.1S6.7,14 6.7,11H5c0,3.41 2.72,6.23 6,6.72V21h2v-3.28c3.28,-0.48 6,-3.3 6,-6.72h-1.7z"/></svg></button>
   <button id="send" type="button">Send</button>
 </div>
+<div id="start"><button type="button" id="startButton"><svg viewBox="0 0 24 24" width="56" height="56"><path fill="currentColor" d="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z"/></svg><span id="startText">Tap here to hear the conversation</span></button></div>
 <script>
 (function () {
   var base = location.pathname.replace(/\/$/, "");
@@ -86,7 +89,8 @@
   function handle(data) {
     dot.className = "dot on";
     language = data.lang || "";
-    if (data.labels && data.labels.length >= 5) {
+    if (data.labels && data.labels.length >= 6) {
+      document.getElementById("startText").textContent = data.labels[5];
       text.placeholder = data.labels[0];
       send.textContent = data.labels[1];
       document.getElementById("aloudText").textContent = data.labels[2];
@@ -99,7 +103,7 @@
 
   function poll() {
     var request = new XMLHttpRequest();
-    request.open("GET", base + "/events?since=" + since);
+    request.open("GET", base + "/events?since=" + since + "&aloud=" + (hears() ? 1 : 0));
     request.timeout = 5000;
     request.onload = function () {
       try { handle(JSON.parse(request.responseText)); } catch (error) {}
@@ -114,7 +118,7 @@
 
   function connect() {
     socket = new WebSocket("wss://" + location.host + base + "/ws?role=guest");
-    socket.onopen = function () { socket.send(JSON.stringify({ type: "hello" })); };
+    socket.onopen = function () { socket.send(JSON.stringify({ type: "hello" })); reportAloud(); };
     socket.onmessage = function (event) {
       if (typeof event.data !== "string") return;
       try {
@@ -127,6 +131,32 @@
       dot.className = "dot";
       setTimeout(connect, 1500);
     };
+  }
+
+  // true if this phone reads the conversation aloud, so the host phone can stay silent for what the host says
+  function hears() {
+    if (!readAloud || !window.speechSynthesis) return false;
+    var voices = window.speechSynthesis.getVoices() || [];
+    if (!voices.length || !language) return true;
+    var wanted = language.toLowerCase().split(/[-_]/)[0];
+    for (var i = 0; i < voices.length; i++) {
+      if ((voices[i].lang || "").toLowerCase().split(/[-_]/)[0] === wanted) return true;
+    }
+    return false;
+  }
+
+  function reportAloud() {
+    if (online && socket && socket.readyState === 1) socket.send(JSON.stringify({ type: "aloud", on: hears() }));
+  }
+
+  function setAloud(on) {
+    readAloud = on;
+    aloud.className = readAloud ? "on" : "";
+    if (readAloud && window.speechSynthesis) {
+      // browsers only allow speech after a tap, this empty phrase unlocks it
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+    }
+    reportAloud();
   }
 
   function waiting(value) {
@@ -221,15 +251,19 @@
   text.addEventListener("keydown", function (event) {
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendText(); }
   });
-  aloud.addEventListener("click", function () {
-    readAloud = !readAloud;
-    aloud.className = readAloud ? "on" : "";
-    if (readAloud && window.speechSynthesis) {
-      // browsers only allow speech after a tap, this empty phrase unlocks it
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
-    }
-  });
-  if (!window.speechSynthesis) aloud.style.display = "none";
+  aloud.addEventListener("click", function () { setAloud(!readAloud); });
+  if (!window.speechSynthesis) {
+    aloud.style.display = "none";
+  } else {
+    // one tap is needed before a browser may speak: we ask for it as soon as the page opens
+    var start = document.getElementById("start");
+    start.style.display = "flex";
+    start.addEventListener("click", function () {
+      start.style.display = "none";
+      setAloud(true);
+    });
+  }
+  setInterval(reportAloud, 5000);
   if (online) {
     hint.textContent = "Hold the microphone to speak";
     mic.style.display = "flex";

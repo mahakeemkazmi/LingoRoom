@@ -65,6 +65,7 @@ public final class GuestServer {
     private volatile Runnable changeListener;
     private volatile String speechLanguage = "";
     private volatile long lastGuestContact;
+    private volatile long lastGuestListening;
     private long revision;
 
     /**
@@ -167,6 +168,11 @@ public final class GuestServer {
 
     public synchronized long getRevision() {
         return revision;
+    }
+
+    /** @return true if a guest page on the local network is reading the conversation aloud right now */
+    public boolean isGuestListening() {
+        return System.currentTimeMillis() - lastGuestListening < 4000;
     }
 
     public void setTextListener(TextListener listener) {
@@ -303,6 +309,9 @@ public final class GuestServer {
                 lastGuestContact = System.currentTimeMillis();
                 long since = 0;
                 for (String part : query.split("&")) {
+                    if (part.equals("aloud=1")) {
+                        lastGuestListening = System.currentTimeMillis();
+                    }
                     if (part.startsWith("since=")) {
                         try {
                             since = Long.parseLong(part.substring(6));
