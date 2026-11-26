@@ -36,6 +36,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatImageButton;
 import nie.translator.rtranslator.voice_translation.guest.GuestInviteDialog;
+import nie.translator.rtranslator.voice_translation.guest.GuestSession;
 import androidx.appcompat.widget.Toolbar;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.core.view.AccessibilityDelegateCompat;
@@ -186,7 +187,14 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
                 @Override
                 public void onClick(View v) {
                     CustomLocale guestLanguage = global.getSecondLanguage(true);
-                    GuestInviteDialog.show(activity, guestLanguage == null ? "" : guestLanguage.getDisplayNameWithoutTTS());
+                    GuestInviteDialog.show(activity, guestLanguage == null ? "" : guestLanguage.getDisplayNameWithoutTTS(), new Runnable() {
+                        @Override
+                        public void run() {
+                            if (description != null && isAdded()) {
+                                description.setText(GuestSession.isActive() ? R.string.guest_description : R.string.description_walkie_talkie);
+                            }
+                        }
+                    });
                 }
             });
         }

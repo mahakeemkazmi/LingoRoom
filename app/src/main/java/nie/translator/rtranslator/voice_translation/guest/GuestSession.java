@@ -26,6 +26,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.Collections;
 
 import nie.translator.rtranslator.R;
@@ -40,16 +41,24 @@ public final class GuestSession {
             "Write your message here",
             "Send",
             "Read aloud",
-            "To speak, tap the microphone on your keyboard"
+            "To speak, tap the box below, then the microphone on your keyboard",
+            "Hold the microphone to speak",
+            "Tap here to hear the conversation"
     };
 
     public interface Host {
         void onGuestText(String text);
 
+        /** @param samples what the guest said, mono, 16 kHz */
+        void onGuestAudio(float[] samples);
+
         void onGuestSessionStarted();
     }
 
     private static GuestServer server;
+    private static volatile RelayClient relay;
+    private static volatile long relaySentRevision;
+    private static String relayRoom;
     private static Host host;
 
     private GuestSession() {
@@ -60,34 +69,128 @@ public final class GuestSession {
         host = newHost;
     }
 
-    /** @return the address of the guest page, or null if the phone is not on a Wi-Fi or hotspot */
+    /** @return true if this build of the app knows a guest relay, so guests can join over the internet */
+    public static boolean hasRelay(Context context) {
+        return !relayAddress(context).isEmpty();
+    }
+
+    private static String relayAddress(Context context) {
+        String address = context.getString(R.string.guest_relay_url).trim();
+        while (address.endsWith("/")) {
+            address = address.substring(0, address.length() - 1);
+        }
+        return address.startsWith("https://") ? address : "";
+    }
+
+    private static String randomHex(int bytes) {
+        byte[] random = new byte[bytes];
+        new SecureRandom().nextBytes(random);
+        StringBuilder builder = new StringBuilder();
+        for (byte value : random) {
+            builder.append(Integer.toHexString((value & 0xFF) | 0x100).substring(1));
+        }
+        return builder.toString();
+    }
+
+    private static void ensureServer(Context context) throws Exception {
+        if (server != null) {
+            return;
+        }
+        final GuestServer created = new GuestServer(readPage(context), LABELS);
+        created.setTextListener(GuestSession::deliverText);
+        created.setChangeListener(() -> {
+            RelayClient current = relay;
+            if (current != null && current.isOpen()) {
+                long sent = relaySentRevision;
+                relaySentRevision = created.getRevision();
+                current.send(created.eventsJson(sent));
+            }
+        });
+        server = created;
+        if (host != null) {
+            host.onGuestSessionStarted();
+        }
+    }
+
+    private static void deliverText(String text) {
+        Host current;
+        synchronized (GuestSession.class) {
+            current = host;
+        }
+        if (current != null) {
+            current.onGuestText(text);
+        }
+    }
+
+    /**
+     * Opens the guest conversation over the internet, through the guest relay.
+     *
+     * @return the address of the guest page, or null if this build has no relay
+     */
+    @Nullable
+    public static synchronized String startOnline(Context context) throws Exception {
+        String address = relayAddress(context);
+        if (address.isEmpty()) {
+            return null;
+        }
+        ensureServer(context);
+        if (relay == null) {
+            relayRoom = randomHex(16);
+            final GuestServer current = server;
+            relay = new RelayClient("wss://" + address.substring(8) + "/r/" + relayRoom + "/ws?role=host&key=" + randomHex(16), new RelayClient.Listener() {
+                @Override
+                public void onGuestJoined() {
+                    RelayClient client = relay;
+                    if (client != null) {
+                        relaySentRevision = current.getRevision();
+                        client.send(current.eventsJson(0));
+                    }
+                }
+
+                @Override
+                public void onGuestText(String text) {
+                    deliverText(text);
+                }
+
+                @Override
+                public void onGuestAudio(float[] samples) {
+                    Host target;
+                    synchronized (GuestSession.class) {
+                        target = host;
+                    }
+                    if (target != null) {
+                        target.onGuestAudio(samples);
+                    }
+                }
+            });
+            relay.connect();
+        }
+        return address + "/r/" + relayRoom;
+    }
+
+    /**
+     * Opens the guest conversation on the local network, with no internet.
+     *
+     * @return the address of the guest page, or null if the phone is not on a Wi-Fi or hotspot
+     */
     @Nullable
     public static synchronized String start(Context context) throws Exception {
         String address = localAddress();
         if (address == null) {
             return null;
         }
-        if (server == null || !server.isRunning()) {
-            GuestServer created = new GuestServer(readPage(context), LABELS);
-            created.setTextListener(text -> {
-                Host current;
-                synchronized (GuestSession.class) {
-                    current = host;
-                }
-                if (current != null) {
-                    current.onGuestText(text);
-                }
-            });
-            created.start();
-            server = created;
-            if (host != null) {
-                host.onGuestSessionStarted();
-            }
+        ensureServer(context);
+        if (!server.isRunning()) {
+            server.start();
         }
         return "http://" + address + ":" + server.getPort() + server.getPath();
     }
 
     public static synchronized void stop() {
+        if (relay != null) {
+            relay.close();
+            relay = null;
+        }
         if (server != null) {
             server.stop();
             server = null;
@@ -95,11 +198,21 @@ public final class GuestSession {
     }
 
     public static synchronized boolean isActive() {
-        return server != null && server.isRunning();
+        return server != null;
     }
 
-    public static synchronized boolean isGuestConnected() {
-        return server != null && server.isGuestConnected();
+    /**
+     * @return true if the phone of a guest is reading the conversation aloud: this phone then does not need
+     * to speak the translation of what its own user says
+     */
+    public static boolean isGuestListening() {
+        GuestServer currentServer;
+        RelayClient currentRelay;
+        synchronized (GuestSession.class) {
+            currentServer = server;
+            currentRelay = relay;
+        }
+        return (currentServer != null && currentServer.isGuestListening()) || (currentRelay != null && currentRelay.isGuestListening());
     }
 
     public static synchronized void publish(String key, boolean hostSpoke, String original, String translated, boolean isFinal) {

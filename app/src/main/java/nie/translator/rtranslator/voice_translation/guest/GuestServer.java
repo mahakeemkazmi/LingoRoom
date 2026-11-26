@@ -62,8 +62,10 @@ public final class GuestServer {
     private ServerSocket serverSocket;
     private volatile boolean running;
     private volatile TextListener textListener;
+    private volatile Runnable changeListener;
     private volatile String speechLanguage = "";
     private volatile long lastGuestContact;
+    private volatile long lastGuestListening;
     private long revision;
 
     /**
@@ -149,6 +151,30 @@ public final class GuestServer {
         return System.currentTimeMillis() - lastGuestContact < 4000;
     }
 
+    /** @param listener called every time the conversation, the language or a text of the page changes */
+    public void setChangeListener(Runnable listener) {
+        changeListener = listener;
+    }
+
+    private void notifyChanged() {
+        Runnable listener = changeListener;
+        if (listener != null) {
+            try {
+                listener.run();
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    public synchronized long getRevision() {
+        return revision;
+    }
+
+    /** @return true if a guest page on the local network is reading the conversation aloud right now */
+    public boolean isGuestListening() {
+        return System.currentTimeMillis() - lastGuestListening < 4000;
+    }
+
     public void setTextListener(TextListener listener) {
         textListener = listener;
     }
@@ -156,11 +182,13 @@ public final class GuestServer {
     /** @param languageCode the language the guest reads, used by the page to read aloud */
     public void setSpeechLanguage(String languageCode) {
         speechLanguage = languageCode == null ? "" : languageCode;
+        notifyChanged();
     }
 
     public synchronized void setLabel(int index, String text) {
         if (index >= 0 && index < labels.length && text != null && !text.trim().isEmpty()) {
             labels[index] = text.trim();
+            notifyChanged();
         }
     }
 
@@ -185,9 +213,11 @@ public final class GuestServer {
         entry.translated = translated == null ? "" : translated;
         entry.isFinal = isFinal;
         entry.revision = ++revision;
+        notifyChanged();
     }
 
-    private synchronized String eventsJson(long since) {
+    /** @return the state of the conversation as json, with only the messages changed after the given revision */
+    public synchronized String eventsJson(long since) {
         StringBuilder json = new StringBuilder();
         json.append("{\"rev\":").append(revision);
         json.append(",\"lang\":").append(quote(speechLanguage));
@@ -279,6 +309,9 @@ public final class GuestServer {
                 lastGuestContact = System.currentTimeMillis();
                 long since = 0;
                 for (String part : query.split("&")) {
+                    if (part.equals("aloud=1")) {
+                        lastGuestListening = System.currentTimeMillis();
+                    }
                     if (part.startsWith("since=")) {
                         try {
                             since = Long.parseLong(part.substring(6));
