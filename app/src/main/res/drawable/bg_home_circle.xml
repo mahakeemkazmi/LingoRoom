@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Soft circle behind the sound wave of the home screen -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="?attr/colorBackgroundColored"/>
+    <stroke android:width="2dp" android:color="#3300B4FF"/>
+</shape>

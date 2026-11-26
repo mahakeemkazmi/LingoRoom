@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sound wave shown in the centre of the home screen -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="72dp"
+    android:viewportWidth="96"
+    android:viewportHeight="72">
+    <path android:pathData="M12,28L12,44" android:strokeColor="#00B4FF" android:strokeWidth="6" android:strokeLineCap="round"/>
+    <path android:pathData="M24,20L24,52" android:strokeColor="#00B4FF" android:strokeWidth="6" android:strokeLineCap="round"/>
+    <path android:pathData="M36,10L36,62" android:strokeColor="#520380" android:strokeWidth="6" android:strokeLineCap="round"/>
+    <path android:pathData="M48,4L48,68" android:strokeColor="#520380" android:strokeWidth="6" android:strokeLineCap="round"/>
+    <path android:pathData="M60,14L60,58" android:strokeColor="#520380" android:strokeWidth="6" android:strokeLineCap="round"/>
+    <path android:pathData="M72,22L72,50" android:strokeColor="#00B4FF" android:strokeWidth="6" android:strokeLineCap="round"/>
+    <path android:pathData="M84,30L84,42" android:strokeColor="#00B4FF" android:strokeWidth="6" android:strokeLineCap="round"/>
+</vector>
