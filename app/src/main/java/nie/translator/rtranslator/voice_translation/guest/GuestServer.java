@@ -51,7 +51,6 @@ public final class GuestServer {
         String original;
         String translated;
         boolean isFinal;
-        boolean hasAudio;
         long revision;
     }
 
@@ -59,7 +58,8 @@ public final class GuestServer {
     private final String token;
     private final LinkedHashMap<String, Entry> messages = new LinkedHashMap<>();
     private final String[] labels;
-    private final LinkedHashMap<String, byte[]> audio = new LinkedHashMap<>();   // the spoken form of the last messages
+    private final LinkedHashMap<String, byte[]> audio = new LinkedHashMap<>();   // the last spoken phrases
+    private final LinkedHashMap<String, Long> soundRevisions = new LinkedHashMap<>();
     private final ExecutorService workers = Executors.newFixedThreadPool(6);
     private ServerSocket serverSocket;
     private volatile boolean running;
@@ -218,18 +218,21 @@ public final class GuestServer {
         notifyChanged();
     }
 
-    /** Adds the spoken form (a wav file) of a message, the page of the guest plays it. */
-    public synchronized void setAudio(String key, byte[] wav) {
-        Entry entry = messages.get(key);
-        if (entry == null || wav == null) {
+    /**
+     * Adds a sound (a wav file with one spoken phrase). The page of the guest plays the sounds in the order
+     * they were added, so a long translation can be heard phrase by phrase while it is still being written.
+     */
+    public synchronized void addSound(String name, byte[] wav) {
+        if (wav == null) {
             return;
         }
-        audio.put(key, wav);
-        while (audio.size() > 6) {
-            audio.remove(audio.keySet().iterator().next());
+        audio.put(name, wav);
+        while (audio.size() > 12) {
+            String oldest = audio.keySet().iterator().next();
+            audio.remove(oldest);
+            soundRevisions.remove(oldest);
         }
-        entry.hasAudio = true;
-        entry.revision = ++revision;
+        soundRevisions.put(name, ++revision);
         notifyChanged();
     }
 
@@ -258,8 +261,15 @@ public final class GuestServer {
             json.append(",\"host\":").append(entry.host);
             json.append(",\"original\":").append(quote(entry.original));
             json.append(",\"translated\":").append(quote(entry.translated));
-            json.append(",\"audio\":").append(entry.hasAudio);
             json.append(",\"final\":").append(entry.isFinal).append('}');
+        }
+        json.append("],\"sounds\":[");
+        first = true;
+        for (Map.Entry<String, Long> sound : soundRevisions.entrySet()) {
+            if (sound.getValue() <= since) continue;
+            if (!first) json.append(',');
+            first = false;
+            json.append(quote(sound.getKey()));
         }
         json.append("]}");
         return json.toString();

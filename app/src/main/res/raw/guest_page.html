@@ -54,7 +54,7 @@
   var dot = document.getElementById("dot");
   var hint = document.getElementById("hint");
   var mic = document.getElementById("mic");
-  var soundKey = null;
+  var soundKey = null, firstData = true;
   var since = 0, language = "", readAloud = false, spoken = {}, rows = {}, pending = [], socket = null;
 
   // the host phone makes the sound of each phrase, this page only plays it, one after the other
@@ -69,7 +69,7 @@
   player.addEventListener("ended", function () { playing = false; playNext(); });
   player.addEventListener("error", function () { playing = false; playNext(); });
   function enqueue(address) {
-    if (queue.length > 5) queue.shift();
+    if (queue.length > 10) queue.shift();
     queue.push(address);
     playNext();
   }
@@ -96,10 +96,6 @@
     row.className = "msg " + (message.host ? "them" : "me") + (message.final ? "" : " wait");
     row.textContent = message.host ? message.translated : message.original;
     list.scrollTop = list.scrollHeight;
-    if (!online && message.host && message.final && message.audio && readAloud && !spoken[message.key]) {
-      spoken[message.key] = true;
-      enqueue(base + "/audio/" + encodeURIComponent(message.key));
-    }
   }
 
   function handle(data) {
@@ -114,6 +110,15 @@
     }
     if (data.rev < since) { since = 0; return; }
     for (var i = 0; i < data.messages.length; i++) show(data.messages[i]);
+    if (!online && data.sounds) {
+      for (var j = 0; j < data.sounds.length; j++) {
+        var name = data.sounds[j];
+        if (spoken[name]) continue;
+        spoken[name] = true;
+        if (readAloud && !firstData) enqueue(base + "/audio/" + encodeURIComponent(name));
+      }
+    }
+    firstData = false;
     since = data.rev;
   }
 

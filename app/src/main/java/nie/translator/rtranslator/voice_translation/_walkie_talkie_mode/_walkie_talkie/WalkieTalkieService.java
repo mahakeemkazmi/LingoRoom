@@ -482,9 +482,25 @@ public class WalkieTalkieService extends VoiceTranslationService {
         synchronized (speechStreamLock) {
             // if the phone of a guest reads the conversation aloud, this phone stays silent for what its own user says
             boolean guestHears = isMine && GuestSession.isGuestListening();
-            boolean canSpeak = languageHasVoice && !guestHears && !isAudioMute && ttsEngine != null && ttsEngine.isActive();
+            if (guestHears) {
+                // the phone of the guest says it, phrase by phrase, exactly as this phone would
+                if (isFinal || isStreamingSpeechEnabled()) {
+                    String guestChunk = speechChunker.nextChunk(resultID, translatedText, isFinal);
+                    if (guestChunk != null) {
+                        GuestSession.speak(guestChunk);
+                    }
+                }
+                if (isFinal) {
+                    speechStreamPending = false;
+                    micRestartDeferred = false;
+                    mainHandler.removeCallbacks(speechStreamTimeout);
+                    return true;   // this phone says nothing, so the mic can listen again
+                }
+                return false;
+            }
+            boolean canSpeak = languageHasVoice && !isAudioMute && ttsEngine != null && ttsEngine.isActive();
             if (!canSpeak) {
-                if (isFinal && !languageHasVoice && !guestHears && !isAudioMute) {
+                if (isFinal && !languageHasVoice && !isAudioMute) {
                     notifyVoiceMissing(outputLanguage);
                 }
                 boolean micWasLeftOff = speechStreamPending && (micRestartDeferred || ttsEngine == null || !ttsEngine.isBusy());

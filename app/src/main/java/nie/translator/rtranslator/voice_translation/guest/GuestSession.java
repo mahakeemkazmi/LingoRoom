@@ -60,6 +60,7 @@ public final class GuestSession {
     private static volatile long relaySentRevision;
     private static String relayRoom;
     private static GuestVoice voice;
+    private static int soundCounter;
     private static volatile String speechLanguage = "";
     private static Host host;
 
@@ -110,7 +111,7 @@ public final class GuestSession {
         });
         server = created;
         voice = new GuestVoice(context, (key, wav) -> {
-            created.setAudio(key, wav);
+            created.addSound(key, wav);
             RelayClient current = relay;
             if (current != null && current.isOpen()) {
                 // over the internet the sound travels with the conversation: first its name, then the sound itself
@@ -210,6 +211,7 @@ public final class GuestSession {
             voice.shutdown();
             voice = null;
         }
+        GuestHotspot.stop();
     }
 
     public static synchronized boolean isActive() {
@@ -233,9 +235,15 @@ public final class GuestSession {
     public static synchronized void publish(String key, boolean hostSpoke, String original, String translated, boolean isFinal) {
         if (server != null) {
             server.publish(key, hostSpoke, original, translated, isFinal);
-            if (hostSpoke && isFinal && voice != null && !speechLanguage.isEmpty() && isGuestListening()) {
-                voice.synthesize(key, translated, speechLanguage);
-            }
+        }
+    }
+
+    /**
+     * Makes the phone of the guest say a phrase. Phrases are heard in the order of the calls.
+     */
+    public static synchronized void speak(String phrase) {
+        if (voice != null && !speechLanguage.isEmpty()) {
+            voice.synthesize("s" + (soundCounter++), phrase, speechLanguage);
         }
     }
 
@@ -268,7 +276,7 @@ public final class GuestSession {
      * @return the address of this phone on its Wi-Fi or on its own hotspot (the hotspot wins), or null
      */
     @Nullable
-    static String localAddress() {
+    public static String localAddress() {
         String wifi = null;
         String other = null;
         try {

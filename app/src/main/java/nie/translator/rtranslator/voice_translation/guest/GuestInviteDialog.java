@@ -19,11 +19,15 @@ package nie.translator.rtranslator.voice_translation.guest;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -62,45 +66,26 @@ public final class GuestInviteDialog {
         }
         onChanged.run();
         if (address == null) {
+            // no Wi-Fi around: this phone can make a small private one for the guest
             new AlertDialog.Builder(activity)
                     .setTitle(R.string.guest_title)
                     .setMessage(R.string.guest_no_network)
-                    .setPositiveButton(android.R.string.ok, null)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(R.string.guest_make_hotspot, (dialog, which) -> startHotspot(activity, guestLanguageName, onChanged))
                     .show();
             return;
         }
-        int padding = dp(activity, 20);
-        LinearLayout content = new LinearLayout(activity);
-        content.setOrientation(LinearLayout.VERTICAL);
-        content.setGravity(Gravity.CENTER_HORIZONTAL);
-        content.setPadding(padding, dp(activity, 8), padding, 0);
-
-        TextView steps = new TextView(activity);
-        steps.setText(activity.getString(online ? R.string.guest_steps_online : R.string.guest_steps, guestLanguageName));
-        steps.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-        content.addView(steps);
-
-        Bitmap code = qrCode(address, dp(activity, 240));
-        if (code != null) {
-            ImageView image = new ImageView(activity);
-            image.setImageBitmap(code);
-            image.setContentDescription(activity.getString(R.string.guest_title));
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(activity, 240), dp(activity, 240));
-            params.topMargin = dp(activity, 12);
-            content.addView(image, params);
+        String steps;
+        if (online) {
+            steps = activity.getString(R.string.guest_steps_online, guestLanguageName);
+        } else if (GuestHotspot.isActive()) {
+            steps = activity.getString(R.string.guest_steps_hotspot_page);
+        } else {
+            steps = activity.getString(R.string.guest_steps, guestLanguageName);
         }
-
-        TextView link = new TextView(activity);
-        link.setText(address);
-        link.setTextIsSelectable(true);
-        link.setGravity(Gravity.CENTER);
-        link.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        link.setPadding(0, dp(activity, 8), 0, 0);
-        content.addView(link);
-
         AlertDialog.Builder builder = new AlertDialog.Builder(activity)
                 .setTitle(R.string.guest_title)
-                .setView(content)
+                .setView(content(activity, steps, address, address))
                 .setPositiveButton(R.string.guest_done, null)
                 .setNegativeButton(R.string.guest_end, (dialog, which) -> {
                     GuestSession.stop();
@@ -110,6 +95,88 @@ public final class GuestInviteDialog {
             builder.setNeutralButton(online ? R.string.guest_use_wifi : R.string.guest_use_internet, (dialog, which) -> show(activity, guestLanguageName, !online, onChanged));
         }
         builder.show();
+    }
+
+    private static void startHotspot(final Activity activity, final String guestLanguageName, final Runnable onChanged) {
+        if (!GuestHotspot.hasPermission(activity)) {
+            GuestHotspot.requestPermission(activity);
+            Toast.makeText(activity, R.string.guest_hotspot_permission, Toast.LENGTH_LONG).show();
+            return;
+        }
+        GuestHotspot.start(activity, (name, password) -> {
+            if (activity.isFinishing() || activity.isDestroyed()) {
+                return;
+            }
+            if (name == null || password == null) {
+                GuestHotspot.stop();
+                new AlertDialog.Builder(activity)
+                        .setTitle(R.string.guest_title)
+                        .setMessage(R.string.guest_hotspot_failed)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show();
+                return;
+            }
+            // first code: the guest joins the private Wi-Fi. Second code (next dialog): the guest opens the page
+            String steps = activity.getString(R.string.guest_steps_hotspot_join, name, password);
+            new AlertDialog.Builder(activity)
+                    .setTitle(R.string.guest_title)
+                    .setView(content(activity, steps, GuestHotspot.joinCode(), null))
+                    .setCancelable(false)
+                    .setNegativeButton(R.string.guest_end, (dialog, which) -> {
+                        GuestSession.stop();
+                        GuestHotspot.stop();
+                        onChanged.run();
+                    })
+                    .setPositiveButton(R.string.guest_next, (dialog, which) -> openWhenReady(activity, guestLanguageName, onChanged, 0))
+                    .show();
+        });
+    }
+
+    /** The address of the phone on its new hotspot can take a moment to appear. */
+    private static void openWhenReady(final Activity activity, final String guestLanguageName, final Runnable onChanged, final int attempt) {
+        if (activity.isFinishing() || activity.isDestroyed()) {
+            return;
+        }
+        if (GuestSession.localAddress() != null || attempt >= 8) {
+            show(activity, guestLanguageName, false, onChanged);
+        } else {
+            new Handler(Looper.getMainLooper()).postDelayed(() -> openWhenReady(activity, guestLanguageName, onChanged, attempt + 1), 500);
+        }
+    }
+
+    private static ScrollView content(Activity activity, String steps, String code, String link) {
+        int padding = dp(activity, 20);
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setGravity(Gravity.CENTER_HORIZONTAL);
+        content.setPadding(padding, dp(activity, 8), padding, 0);
+
+        TextView stepsView = new TextView(activity);
+        stepsView.setText(steps);
+        stepsView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        content.addView(stepsView);
+
+        Bitmap bitmap = qrCode(code, dp(activity, 240));
+        if (bitmap != null) {
+            ImageView image = new ImageView(activity);
+            image.setImageBitmap(bitmap);
+            image.setContentDescription(activity.getString(R.string.guest_title));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(activity, 240), dp(activity, 240));
+            params.topMargin = dp(activity, 12);
+            content.addView(image, params);
+        }
+        if (link != null) {
+            TextView linkView = new TextView(activity);
+            linkView.setText(link);
+            linkView.setTextIsSelectable(true);
+            linkView.setGravity(Gravity.CENTER);
+            linkView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+            linkView.setPadding(0, dp(activity, 8), 0, 0);
+            content.addView(linkView);
+        }
+        ScrollView scroll = new ScrollView(activity);
+        scroll.addView(content);
+        return scroll;
     }
 
     private static Bitmap qrCode(String text, int size) {
