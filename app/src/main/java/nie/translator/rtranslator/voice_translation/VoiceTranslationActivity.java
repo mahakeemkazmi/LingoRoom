@@ -66,6 +66,7 @@ import nie.translator.rtranslator.voice_translation._conversation_mode._conversa
 import nie.translator.rtranslator.voice_translation._conversation_mode._conversation.main.ConversationMainFragment;
 import nie.translator.rtranslator.voice_translation._conversation_mode.communication.ConversationBluetoothCommunicator;
 import nie.translator.rtranslator.voice_translation._text_translation.TranslationFragment;
+import nie.translator.rtranslator.voice_translation.history.HistoryFragment;
 import nie.translator.rtranslator.voice_translation._walkie_talkie_mode._walkie_talkie.WalkieTalkieFragment;
 import nie.translator.rtranslator.voice_translation._walkie_talkie_mode._walkie_talkie.WalkieTalkieService;
 
@@ -79,7 +80,11 @@ public class VoiceTranslationActivity extends GeneralActivity {
     public static final int CONVERSATION_FRAGMENT = 1;
     public static final int WALKIE_TALKIE_FRAGMENT = 2;
     public static final int TRANSLATION_FRAGMENT = 3;
-    public static final int DEFAULT_FRAGMENT = TRANSLATION_FRAGMENT;
+    public static final int HOME_FRAGMENT = 4;
+    public static final int HISTORY_FRAGMENT = 5;
+    public static final int FAVORITES_FRAGMENT = 6;
+    public static final int DEFAULT_FRAGMENT = HOME_FRAGMENT;
+    private boolean firstResume = true;
     //objects
     private Global global;
     private CoordinatorLayout fragmentContainer;
@@ -164,7 +169,12 @@ public class VoiceTranslationActivity extends GeneralActivity {
         if(!startedByIntent){
             SharedPreferences sharedPreferences = this.getSharedPreferences("default", Context.MODE_PRIVATE);
             fragment = sharedPreferences.getInt("fragment", DEFAULT_FRAGMENT);
+            if (firstResume && fragment == TRANSLATION_FRAGMENT) {
+                // the app always opens on the home screen, text translation is one tap away from there
+                fragment = HOME_FRAGMENT;
+            }
         }
+        firstResume = false;
         setFragment(fragment, fragment == WALKIE_TALKIE_FRAGMENT || fragment == PAIRING_FRAGMENT);
         if(getResources() != null) {
             config = getResources().getConfiguration();
@@ -257,6 +267,39 @@ public class VoiceTranslationActivity extends GeneralActivity {
                 }
                 break;
             }
+            case HOME_FRAGMENT:{
+                // possible stop of the Conversation and WalkieTalkie Service
+                stopConversationService();
+                stopWalkieTalkieService();
+                // possible destroy of BluetoothCommunicator
+                global.destroyBluetoothCommunicator(null);
+                if (getCurrentFragmentId() != HOME_FRAGMENT) {
+                    HomeFragment homeFragment = new HomeFragment();
+                    FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+                    transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_CLOSE);
+                    transaction.replace(R.id.fragment_container, homeFragment);
+                    transaction.commit();
+                    currentFragment = HOME_FRAGMENT;
+                    saveFragment();
+                }
+                break;
+            }
+            case HISTORY_FRAGMENT:
+            case FAVORITES_FRAGMENT: {
+                stopConversationService();
+                stopWalkieTalkieService();
+                global.destroyBluetoothCommunicator(null);
+                if (getCurrentFragmentId() != fragmentName) {
+                    HistoryFragment historyFragment = HistoryFragment.newInstance(fragmentName == FAVORITES_FRAGMENT);
+                    FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+                    transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE);
+                    transaction.replace(R.id.fragment_container, historyFragment);
+                    transaction.commit();
+                    currentFragment = fragmentName;
+                    // History and Favorites are not restored at the next start: the app reopens on the home screen
+                }
+                break;
+            }
             case TRANSLATION_FRAGMENT:{
                 // possible stop of the Conversation and WalkieTalkie Service
                 stopConversationService();
@@ -312,6 +355,12 @@ public class VoiceTranslationActivity extends GeneralActivity {
                 }
                 if (currentFragment.getClass().equals(TranslationFragment.class)) {
                     return TRANSLATION_FRAGMENT;
+                }
+                if (currentFragment.getClass().equals(HomeFragment.class)) {
+                    return HOME_FRAGMENT;
+                }
+                if (currentFragment instanceof HistoryFragment) {
+                    return ((HistoryFragment) currentFragment).isFavoritesOnly() ? FAVORITES_FRAGMENT : HISTORY_FRAGMENT;
                 }
             }
         }
@@ -582,6 +631,10 @@ public class VoiceTranslationActivity extends GeneralActivity {
             } else if (fragment instanceof WalkieTalkieFragment) {
                 setFragment(DEFAULT_FRAGMENT);
             } else if (fragment instanceof PairingFragment) {
+                setFragment(DEFAULT_FRAGMENT);
+            } else if (fragment instanceof TranslationFragment) {
+                setFragment(DEFAULT_FRAGMENT);
+            } else if (fragment instanceof HistoryFragment) {
                 setFragment(DEFAULT_FRAGMENT);
             }else{
                 super.onBackPressed();

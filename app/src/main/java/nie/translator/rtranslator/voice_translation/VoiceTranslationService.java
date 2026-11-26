@@ -297,6 +297,11 @@ public abstract class VoiceTranslationService extends GeneralService {
 
     // messages
 
+    /** @return the messages exchanged since the beginning of the service */
+    protected ArrayList<GuiMessage> getMessages() {
+        return messages;
+    }
+
     protected void addOrUpdateMessage(GuiMessage message) {
         if(message.getMessageID() != -1) {
             for (int i = 0; i < messages.size(); i++) {

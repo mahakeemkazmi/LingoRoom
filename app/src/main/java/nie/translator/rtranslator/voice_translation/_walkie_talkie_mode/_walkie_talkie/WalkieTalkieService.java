@@ -39,6 +39,7 @@ import nie.translator.rtranslator.tools.ErrorCodes;
 import nie.translator.rtranslator.tools.Tools;
 import nie.translator.rtranslator.tools.gui.messages.GuiMessage;
 import nie.translator.rtranslator.voice_translation.SpokenLanguagePicker;
+import nie.translator.rtranslator.voice_translation.history.ConversationHistoryStore;
 import nie.translator.rtranslator.voice_translation.StreamingSpeechChunker;
 import nie.translator.rtranslator.voice_translation.VoiceTranslationService;
 import nie.translator.rtranslator.voice_translation.neural_networks.NeuralNetworkApiResult;
@@ -82,6 +83,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
     private CustomLocale secondLanguage;
     private Translator.TranslateListener firstResultTranslateListener;
     private Translator.TranslateListener secondResultTranslateListener;
+    private final long conversationStartedAt = System.currentTimeMillis();
     private volatile double firstLanguageAudioProbability = -1;   // from the last automatic recognition, -1 if unknown
     // streaming speech (the translation is spoken phrase by phrase while it is generated)
     private final StreamingSpeechChunker speechChunker = new StreamingSpeechChunker();
@@ -482,6 +484,48 @@ public class WalkieTalkieService extends VoiceTranslationService {
         }
     }
 
+    /**
+     * Saves the conversation that is ending to the History, on this phone, if the user has not turned that off.
+     */
+    private void saveConversationToHistory() {
+        try {
+            final Context context = getApplicationContext();
+            if (!ConversationHistoryStore.isEnabled(context) || firstLanguage == null || secondLanguage == null) {
+                return;
+            }
+            final ConversationHistoryStore.Conversation conversation = new ConversationHistoryStore.Conversation();
+            conversation.startedAt = conversationStartedAt;
+            conversation.firstLanguage = firstLanguage.getDisplayNameWithoutTTS();
+            conversation.secondLanguage = secondLanguage.getDisplayNameWithoutTTS();
+            for (GuiMessage message : new ArrayList<>(getMessages())) {
+                if (message == null || !message.isFinal() || message.getMessage() == null) {
+                    continue;
+                }
+                String translated = message.getMessage().getText();
+                if (translated == null || translated.trim().isEmpty()) {
+                    continue;
+                }
+                ConversationHistoryStore.Line line = new ConversationHistoryStore.Line();
+                line.firstSpeaker = message.isMine();
+                String original = message.getMessage().getTextToTranslate();
+                line.original = original == null ? "" : original;
+                line.translated = translated;
+                conversation.lines.add(line);
+            }
+            if (conversation.lines.isEmpty()) {
+                return;
+            }
+            new Thread("saveConversationHistory") {
+                @Override
+                public void run() {
+                    ConversationHistoryStore.save(context, conversation);
+                }
+            }.start();
+        } catch (Throwable ignored) {
+            // history is a convenience, it must never disturb the end of a conversation
+        }
+    }
+
     private boolean isStreamingSpeechEnabled() {
         // read every time, so a change in the settings applies without restarting the mode
         return getSharedPreferences("default", Context.MODE_PRIVATE).getBoolean("walkieTalkieStreamingTTS", true);
@@ -565,6 +609,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
     public void onDestroy() {
         mainHandler.removeCallbacks(speechStreamTimeout);
         Log.i("walkieTalkie", "WalkieTalkie service destroyed");
+        saveConversationToHistory();
         //disconnect speechRecognizerCallback
         speechRecognizer.removeMultiCallback(speechRecognizerCallback);
         speechRecognizer.removeCallback(speechRecognizerSingleCallback);

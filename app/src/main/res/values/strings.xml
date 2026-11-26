@@ -248,6 +248,30 @@
     <string name="preference_indic_speech_ready">The listening model is ready</string>
     <string name="preference_indic_speech_failed">The download failed. Check your connection and try again.</string>
     <string name="preference_indic_speech_wait">Another listening model is downloading. Try again when it has finished.</string>
+    <string name="history_empty">No conversations yet.\n\nConversations you have in Lingo Room are saved here, on this phone only.</string>
+    <string name="favorites_empty">No favorites yet.\n\nTap the star on a conversation in History to keep it here.</string>
+    <string name="history_add_favorite">Add to favorites</string>
+    <string name="history_remove_favorite">Remove from favorites</string>
+    <string name="history_delete">Delete</string>
+    <string name="history_delete_question">Delete this conversation from this phone?</string>
+    <string name="preference_title_save_history">Save conversation history</string>
+    <string name="preference_description_save_history">Keep conversations in History, on this phone only. Turn off to stop saving new ones.</string>
+    <string name="label_group_short">Group</string>
+    <string name="home_brand_first" translatable="false">Lingo</string>
+    <string name="home_brand_second" translatable="false">Room</string>
+    <string name="home_tagline">Real-time conversation\nin any language</string>
+    <string name="home_greeting_first" translatable="false">नमस्ते!</string>
+    <string name="home_greeting_second" translatable="false">Hello!</string>
+    <string name="home_you_speak">You speak</string>
+    <string name="home_they_speak">They speak</string>
+    <string name="home_swap_languages">Swap languages</string>
+    <string name="home_type_instead">Type to translate instead</string>
+    <string name="home_choose_language">Choose a language</string>
+    <string name="home_nav_home">Home</string>
+    <string name="home_nav_history">History</string>
+    <string name="home_nav_favorites">Favorites</string>
+    <string name="home_nav_offline">Offline</string>
+    <string name="home_nav_profile">Profile</string>
     <string name="preference_title_streaming_speech">Speak while translating</string>
     <string name="preference_description_streaming_speech">In Conversation mode, speak each phrase as soon as it is translated instead of waiting for the whole sentence</string>
     <string name="preference_description_tts">System settings of tts, an eventual change of the preferred engine will be applied only after the restart of the app</string>

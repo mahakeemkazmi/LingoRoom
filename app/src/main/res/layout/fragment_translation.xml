@@ -687,7 +687,7 @@
                         android:layout_marginBottom="16dp"
                         android:fontFamily="sans-serif-light"
                         android:gravity="center"
-                        android:text="@string/title_fragment_conversation"
+                        android:text="@string/label_group_short"
                         android:textSize="12sp"
                         android:visibility="visible"
                         android:importantForAccessibility="no"
