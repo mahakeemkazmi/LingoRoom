@@ -39,6 +39,7 @@ import nie.translator.rtranslator.tools.ErrorCodes;
 import nie.translator.rtranslator.tools.Tools;
 import nie.translator.rtranslator.tools.gui.messages.GuiMessage;
 import nie.translator.rtranslator.voice_translation.SpokenLanguagePicker;
+import nie.translator.rtranslator.voice_translation.guest.EchoGuard;
 import nie.translator.rtranslator.voice_translation.guest.GuestSession;
 import nie.translator.rtranslator.voice_translation.history.ConversationHistoryStore;
 import nie.translator.rtranslator.voice_translation.StreamingSpeechChunker;
@@ -85,6 +86,8 @@ public class WalkieTalkieService extends VoiceTranslationService {
     private Translator.TranslateListener firstResultTranslateListener;
     private Translator.TranslateListener secondResultTranslateListener;
     private final long conversationStartedAt = System.currentTimeMillis();
+    private final EchoGuard guestEchoGuard = new EchoGuard();
+    private boolean textFromGuestLink = false;   // true while we handle a text that came through the guest link, not through our mic
     private boolean guestRecognizing = false;   // true while we recognize what a guest said through the guest link
     private volatile double firstLanguageAudioProbability = -1;   // from the last automatic recognition, -1 if unknown
     // streaming speech (the translation is spoken phrase by phrase while it is generated)
@@ -341,7 +344,9 @@ public class WalkieTalkieService extends VoiceTranslationService {
                         startVoiceRecorder();
                         notifyMicActivated();
                     } else {
+                        textFromGuestLink = true;
                         translate(text, secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
+                        textFromGuestLink = false;
                     }
                     return;
                 }
@@ -374,6 +379,9 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     public void onSuccess(ArrayList<CustomLocale> ttsLanguages) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, true, isFinal);
                         GuestSession.publish("a" + resultID, true, textToTranslate, translatedText, isFinal);
+                        if (isFinal && GuestSession.isActive()) {
+                            guestEchoGuard.remember(translatedText, System.currentTimeMillis());
+                        }
                         // we speak the translation phrase by phrase while it is still being generated
                         boolean canSpeak = CustomLocale.containsLanguage(ttsLanguages, outputLanguage);
                         boolean restartMic = speakStreaming(textToTranslate, translatedText, resultID, true, isFinal, inputLanguage, outputLanguage, canSpeak);
@@ -391,6 +399,9 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     public void onFailure(int[] reasons, long value) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, true, isFinal);
                         GuestSession.publish("a" + resultID, true, textToTranslate, translatedText, isFinal);
+                        if (isFinal && GuestSession.isActive()) {
+                            guestEchoGuard.remember(translatedText, System.currentTimeMillis());
+                        }
                         WalkieTalkieService.super.notifyMessage(message);
                         // we save every new message in the exchanged messages so that the fragment can restore them
                         WalkieTalkieService.super.addOrUpdateMessage(message);
@@ -566,7 +577,9 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     }
                     // the translation will be spoken by this phone, so the mic stays off until then (as after a spoken phrase)
                     stopVoiceRecorder();
+                    textFromGuestLink = true;
                     translate(text, secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
+                    textFromGuestLink = false;
                 }
             });
         }
@@ -767,6 +780,13 @@ public class WalkieTalkieService extends VoiceTranslationService {
     }
 
     private void translate(final String textToTranslate, final CustomLocale languageInput, final CustomLocale languageOutput, int beamSize, boolean saveResults, final Translator.TranslateListener responseListener){
+        if (!textFromGuestLink && languageInput != null && languageInput.equals(secondLanguage) && GuestSession.isGuestListening()
+                && guestEchoGuard.isEcho(textToTranslate, System.currentTimeMillis())) {
+            // our mic heard the phone of the guest reading aloud what we said: we do not translate it back
+            startVoiceRecorder();
+            notifyMicActivated();
+            return;
+        }
         if(!isMetaText(textToTranslate)) {
             translator.translate(textToTranslate, languageInput, languageOutput, beamSize, saveResults, Global.RTranslatorMode.WALKIE_TALKIE_MODE, responseListener);
         }else{
