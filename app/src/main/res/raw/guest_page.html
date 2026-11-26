@@ -21,6 +21,8 @@
   #text { flex: 1; font: inherit; font-size: 18px; padding: 10px 12px; border: 1px solid #C9BEE8; border-radius: 14px; resize: none; min-height: 46px; max-height: 120px; }
   button { font: inherit; border: 0; border-radius: 14px; }
   #send { background: #520380; color: #fff; font-weight: 700; font-size: 17px; padding: 0 16px; height: 46px; }
+  #mic { display: none; align-items: center; justify-content: center; width: 56px; height: 46px; background: #00B4FF; color: #171B38; touch-action: none; -webkit-user-select: none; user-select: none; }
+  #mic.on { background: #FFB025; transform: scale(1.12); }
   #aloud { background: transparent; color: #520380; font-size: 15px; padding: 6px 16px 10px; text-align: left; display: flex; align-items: center; gap: 8px; }
   #aloud i { width: 38px; height: 22px; border-radius: 11px; background: #C9BEE8; position: relative; display: inline-block; }
   #aloud i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; }
@@ -35,17 +37,21 @@
 <div id="hint">To speak, tap the microphone on your keyboard</div>
 <div id="bar">
   <textarea id="text" rows="1" dir="auto" placeholder="Write your message here"></textarea>
+  <button id="mic" type="button" aria-label="Microphone"><svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M12,14c1.66,0 3,-1.34 3,-3V5c0,-1.66 -1.34,-3 -3,-3S9,3.34 9,5v6c0,1.66 1.34,3 3,3zM17.3,11c0,3 -2.54,5.1 -5.3,5.1S6.7,14 6.7,11H5c0,3.41 2.72,6.23 6,6.72V21h2v-3.28c3.28,-0.48 6,-3.3 6,-6.72h-1.7z"/></svg></button>
   <button id="send" type="button">Send</button>
 </div>
 <script>
 (function () {
   var base = location.pathname.replace(/\/$/, "");
+  var online = location.protocol === "https:";   // served by the relay: voice is available
   var list = document.getElementById("list");
   var text = document.getElementById("text");
   var send = document.getElementById("send");
   var aloud = document.getElementById("aloud");
   var dot = document.getElementById("dot");
-  var since = 0, language = "", readAloud = false, spoken = {}, rows = {}, pending = [];
+  var hint = document.getElementById("hint");
+  var mic = document.getElementById("mic");
+  var since = 0, language = "", readAloud = false, spoken = {}, rows = {}, pending = [], socket = null;
 
   function show(message) {
     var row = rows[message.key];
@@ -54,19 +60,20 @@
       row.dir = "auto";
       rows[message.key] = row;
       list.appendChild(row);
+      if (!message.host) {
+        // the temporary bubble of what the guest just wrote or said is replaced by the real one
+        for (var i = 0; i < pending.length; i++) {
+          if (pending[i].text === null || pending[i].text === message.original) {
+            pending[i].row.remove();
+            pending.splice(i, 1);
+            break;
+          }
+        }
+      }
     }
     // what the host said is shown translated, what the guest said is shown as it was said
     row.className = "msg " + (message.host ? "them" : "me") + (message.final ? "" : " wait");
     row.textContent = message.host ? message.translated : message.original;
-    if (!message.host) {
-      for (var i = 0; i < pending.length; i++) {
-        if (pending[i].text === message.original) {
-          pending[i].row.remove();
-          pending.splice(i, 1);
-          break;
-        }
-      }
-    }
     list.scrollTop = list.scrollHeight;
     if (message.host && message.final && readAloud && !spoken[message.key] && window.speechSynthesis) {
       spoken[message.key] = true;
@@ -76,26 +83,26 @@
     }
   }
 
+  function handle(data) {
+    dot.className = "dot on";
+    language = data.lang || "";
+    if (data.labels && data.labels.length >= 5) {
+      text.placeholder = data.labels[0];
+      send.textContent = data.labels[1];
+      document.getElementById("aloudText").textContent = data.labels[2];
+      hint.textContent = online ? data.labels[4] : data.labels[3];
+    }
+    if (data.rev < since) { since = 0; return; }
+    for (var i = 0; i < data.messages.length; i++) show(data.messages[i]);
+    since = data.rev;
+  }
+
   function poll() {
     var request = new XMLHttpRequest();
     request.open("GET", base + "/events?since=" + since);
     request.timeout = 5000;
     request.onload = function () {
-      try {
-        var data = JSON.parse(request.responseText);
-        dot.className = "dot on";
-        language = data.lang || "";
-        if (data.labels && data.labels.length >= 4) {
-          text.placeholder = data.labels[0];
-          send.textContent = data.labels[1];
-          document.getElementById("aloudText").textContent = data.labels[2];
-          document.getElementById("hint").textContent = data.labels[3];
-        }
-        if (data.rev < since) { since = 0; } else {
-          for (var i = 0; i < data.messages.length; i++) show(data.messages[i]);
-          since = data.rev;
-        }
-      } catch (error) {}
+      try { handle(JSON.parse(request.responseText)); } catch (error) {}
       setTimeout(poll, 700);
     };
     request.onerror = request.ontimeout = function () {
@@ -105,21 +112,109 @@
     request.send();
   }
 
-  function sendText() {
-    var value = text.value.replace(/\s+/g, " ").trim();
-    if (!value) return;
-    text.value = "";
+  function connect() {
+    socket = new WebSocket("wss://" + location.host + base + "/ws?role=guest");
+    socket.onopen = function () { socket.send(JSON.stringify({ type: "hello" })); };
+    socket.onmessage = function (event) {
+      if (typeof event.data !== "string") return;
+      try {
+        var data = JSON.parse(event.data);
+        if (data.type === "bye") { dot.className = "dot"; return; }
+        if (data.messages) handle(data);
+      } catch (error) {}
+    };
+    socket.onclose = function () {
+      dot.className = "dot";
+      setTimeout(connect, 1500);
+    };
+  }
+
+  function waiting(value) {
     var row = document.createElement("div");
     row.dir = "auto";
     row.className = "msg me wait";
-    row.textContent = value;
+    row.textContent = value === null ? "..." : value;
     list.appendChild(row);
     list.scrollTop = list.scrollHeight;
     pending.push({ text: value, row: row });
-    var request = new XMLHttpRequest();
-    request.open("POST", base + "/say");
-    request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
-    request.send(value);
+  }
+
+  function sendText() {
+    var value = text.value.replace(/\s+/g, " ").trim();
+    if (!value) return;
+    if (online) {
+      if (!socket || socket.readyState !== 1) return;
+      socket.send(JSON.stringify({ type: "say", text: value }));
+    } else {
+      var request = new XMLHttpRequest();
+      request.open("POST", base + "/say");
+      request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
+      request.send(value);
+    }
+    text.value = "";
+    waiting(value);
+  }
+
+  // voice: while the button is held the microphone sound goes to the host phone, which understands and translates it
+  var audio = null, stream = null, talking = false, talkTimer = null, sentSamples = 0;
+
+  function downsample(input, rate) {
+    var ratio = rate / 16000;
+    var length = Math.floor(input.length / ratio);
+    var output = new Int16Array(length);
+    for (var i = 0; i < length; i++) {
+      var start = Math.floor(i * ratio), end = Math.min(input.length, Math.floor((i + 1) * ratio));
+      var sum = 0;
+      for (var j = start; j < end; j++) sum += input[j];
+      var value = sum / Math.max(1, end - start);
+      output[i] = Math.max(-1, Math.min(1, value)) * 32767;
+    }
+    return output;
+  }
+
+  function prepareMicrophone(done) {
+    if (stream) { done(); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } }).then(function (result) {
+      stream = result;
+      audio = new (window.AudioContext || window.webkitAudioContext)();
+      var source = audio.createMediaStreamSource(stream);
+      var processor = audio.createScriptProcessor(4096, 1, 1);
+      var silent = audio.createGain();
+      silent.gain.value = 0;
+      processor.onaudioprocess = function (event) {
+        if (!talking || !socket || socket.readyState !== 1) return;
+        var samples = downsample(event.inputBuffer.getChannelData(0), audio.sampleRate);
+        sentSamples += samples.length;
+        socket.send(samples.buffer);
+      };
+      source.connect(processor);
+      processor.connect(silent);
+      silent.connect(audio.destination);
+      // the first press only asks for the permission, the person presses again to talk
+    }).catch(function () {});
+  }
+
+  function startTalking(event) {
+    event.preventDefault();
+    if (talking || !socket || socket.readyState !== 1) return;
+    prepareMicrophone(function () {
+      if (audio.state === "suspended") audio.resume();
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      talking = true;
+      sentSamples = 0;
+      mic.className = "on";
+      talkTimer = setTimeout(stopTalking, 30000);
+    });
+  }
+
+  function stopTalking() {
+    if (!talking) return;
+    talking = false;
+    clearTimeout(talkTimer);
+    mic.className = "";
+    if (socket && socket.readyState === 1) socket.send(JSON.stringify({ type: "audio_end" }));
+    if (sentSamples > 4800) waiting(null);
   }
 
   send.addEventListener("click", sendText);
@@ -135,7 +230,18 @@
     }
   });
   if (!window.speechSynthesis) aloud.style.display = "none";
-  poll();
+  if (online) {
+    hint.textContent = "Hold the microphone to speak";
+    mic.style.display = "flex";
+    mic.addEventListener("pointerdown", startTalking);
+    mic.addEventListener("pointerup", stopTalking);
+    mic.addEventListener("pointercancel", stopTalking);
+    mic.addEventListener("pointerleave", stopTalking);
+    mic.addEventListener("contextmenu", function (event) { event.preventDefault(); });
+    connect();
+  } else {
+    poll();
+  }
 })();
 </script>
 </body>

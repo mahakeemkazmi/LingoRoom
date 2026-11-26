@@ -130,6 +130,7 @@ dependencies {
     // Support libraries
     implementation 'com.google.code.gson:gson:2.14.0'
     implementation 'com.google.zxing:core:3.5.3'   // QR code of the guest link
+    implementation 'com.squareup.okhttp3:okhttp:3.14.9'   // connection to the guest relay (pure Java)
     implementation "com.google.android.material:material:1.9.0"  //1.9.0
     implementation "androidx.cardview:cardview:1.0.0"
     implementation "androidx.recyclerview:recyclerview:1.0.0"

@@ -44,9 +44,16 @@ public final class GuestInviteDialog {
     }
 
     public static void show(Activity activity, String guestLanguageName) {
+        show(activity, guestLanguageName, GuestSession.hasRelay(activity));
+    }
+
+    /**
+     * @param online true for the internet link (the guest can talk), false for the Wi-Fi link (works with no internet)
+     */
+    private static void show(final Activity activity, final String guestLanguageName, final boolean online) {
         String address;
         try {
-            address = GuestSession.start(activity.getApplicationContext());
+            address = online ? GuestSession.startOnline(activity.getApplicationContext()) : GuestSession.start(activity.getApplicationContext());
         } catch (Throwable error) {
             address = null;
         }
@@ -65,7 +72,7 @@ public final class GuestInviteDialog {
         content.setPadding(padding, dp(activity, 8), padding, 0);
 
         TextView steps = new TextView(activity);
-        steps.setText(activity.getString(R.string.guest_steps, guestLanguageName));
+        steps.setText(activity.getString(online ? R.string.guest_steps_online : R.string.guest_steps, guestLanguageName));
         steps.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
         content.addView(steps);
 
@@ -87,12 +94,15 @@ public final class GuestInviteDialog {
         link.setPadding(0, dp(activity, 8), 0, 0);
         content.addView(link);
 
-        new AlertDialog.Builder(activity)
+        AlertDialog.Builder builder = new AlertDialog.Builder(activity)
                 .setTitle(R.string.guest_title)
                 .setView(content)
                 .setPositiveButton(R.string.guest_done, null)
-                .setNegativeButton(R.string.guest_end, (dialog, which) -> GuestSession.stop())
-                .show();
+                .setNegativeButton(R.string.guest_end, (dialog, which) -> GuestSession.stop());
+        if (GuestSession.hasRelay(activity)) {
+            builder.setNeutralButton(online ? R.string.guest_use_wifi : R.string.guest_use_internet, (dialog, which) -> show(activity, guestLanguageName, !online));
+        }
+        builder.show();
     }
 
     private static Bitmap qrCode(String text, int size) {

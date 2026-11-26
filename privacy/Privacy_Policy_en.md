@@ -22,7 +22,7 @@ The app handles the following information on your device only. We cannot see it.
 - **Your voice.** The microphone audio is turned into text by a speech model running on your phone. The audio is processed in memory and is not uploaded.
 - **Transcriptions and translations.** The text of what was said and its translation are shown on your screen and are not sent to us.
 - **Conversation history.** When a conversation ends, its text (not the audio) is saved in the app's private storage on your phone, so you can find it again under History. You can delete any conversation there, and you can turn saving off in the settings.
-- **Guest link.** If you invite a guest, your phone shows the conversation text to the guest's browser directly over your Wi-Fi or hotspot. It does not pass through us or through any internet service, and the link stops working when the conversation ends.
+- **Guest link.** If you invite a guest on the same Wi-Fi or hotspot, your phone shows the conversation text to the guest's browser directly, with no internet service involved. If you invite a guest over the internet, the conversation text and the guest's voice pass through our relay service (hosted on Cloudflare) on their way between the two phones. The relay only forwards them and does not store them. The link stops working when the conversation ends.
 - **Your name and profile picture.** You choose these when you set up the app. They are stored on your phone and are shared only as described under Conversation mode below.
 - **Devices you have connected to.** The app keeps a list of recent Conversation mode partners on your phone, so you can reconnect to them.
 - **Your settings**, such as your chosen languages.
