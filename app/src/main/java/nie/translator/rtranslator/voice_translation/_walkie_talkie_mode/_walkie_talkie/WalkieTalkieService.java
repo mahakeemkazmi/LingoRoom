@@ -39,6 +39,7 @@ import nie.translator.rtranslator.tools.ErrorCodes;
 import nie.translator.rtranslator.tools.Tools;
 import nie.translator.rtranslator.tools.gui.messages.GuiMessage;
 import nie.translator.rtranslator.voice_translation.SpokenLanguagePicker;
+import nie.translator.rtranslator.voice_translation.guest.GuestSession;
 import nie.translator.rtranslator.voice_translation.history.ConversationHistoryStore;
 import nie.translator.rtranslator.voice_translation.StreamingSpeechChunker;
 import nie.translator.rtranslator.voice_translation.VoiceTranslationService;
@@ -106,6 +107,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
     public void onCreate() {
         super.onCreate();
         translator = ((Global) getApplication()).getTranslator();
+        GuestSession.setHost(guestHost);
         speechRecognizer = ((Global) getApplication()).getSpeechRecognizer();
         SharedPreferences sharedPreferences = this.getSharedPreferences("default", Context.MODE_PRIVATE);
         isAudioMute = !sharedPreferences.getBoolean("walkieTalkieAutoTTS", true);
@@ -354,6 +356,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onSuccess(ArrayList<CustomLocale> ttsLanguages) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, true, isFinal);
+                        GuestSession.publish("a" + resultID, true, textToTranslate, translatedText, isFinal);
                         // we speak the translation phrase by phrase while it is still being generated
                         boolean canSpeak = CustomLocale.containsLanguage(ttsLanguages, outputLanguage);
                         boolean restartMic = speakStreaming(textToTranslate, translatedText, resultID, true, isFinal, inputLanguage, outputLanguage, canSpeak);
@@ -370,6 +373,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onFailure(int[] reasons, long value) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, true, isFinal);
+                        GuestSession.publish("a" + resultID, true, textToTranslate, translatedText, isFinal);
                         WalkieTalkieService.super.notifyMessage(message);
                         // we save every new message in the exchanged messages so that the fragment can restore them
                         WalkieTalkieService.super.addOrUpdateMessage(message);
@@ -398,6 +402,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onSuccess(ArrayList<CustomLocale> ttsLanguages) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, false, isFinal);
+                        GuestSession.publish("b" + resultID, false, textToTranslate, translatedText, isFinal);
                         // we speak the translation phrase by phrase while it is still being generated
                         boolean canSpeak = CustomLocale.containsLanguage(ttsLanguages, outputLanguage);
                         boolean restartMic = speakStreaming(textToTranslate, translatedText, resultID, false, isFinal, inputLanguage, outputLanguage, canSpeak);
@@ -414,6 +419,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onFailure(int[] reasons, long value) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), firstLanguage, outputLanguage, resultID, false, isFinal);
+                        GuestSession.publish("b" + resultID, false, textToTranslate, translatedText, isFinal);
                         WalkieTalkieService.super.notifyMessage(message);
                         // we save every new message in the exchanged messages so that the fragment can restore them
                         WalkieTalkieService.super.addOrUpdateMessage(message);
@@ -526,6 +532,69 @@ public class WalkieTalkieService extends VoiceTranslationService {
         }
     }
 
+    /**
+     * The guest of a guest conversation (a person who follows the conversation in a browser, without the app)
+     * always uses the second language.
+     */
+    private final GuestSession.Host guestHost = new GuestSession.Host() {
+        @Override
+        public void onGuestText(final String text) {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (firstLanguage == null || secondLanguage == null) {
+                        return;
+                    }
+                    // the translation will be spoken by this phone, so the mic stays off until then (as after a spoken phrase)
+                    stopVoiceRecorder();
+                    translate(text, secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
+                }
+            });
+        }
+
+        @Override
+        public void onGuestSessionStarted() {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (secondLanguage == null) {
+                        return;
+                    }
+                    GuestSession.setSpeechLanguage(secondLanguage.getCode());
+                    if (!"en".equals(secondLanguage.getCode())) {
+                        translateGuestLabel(0);
+                    }
+                }
+            });
+        }
+    };
+
+    /**
+     * Translates the few texts of the guest page into the language of the guest, one after the other.
+     */
+    private void translateGuestLabel(final int index) {
+        if (index >= GuestSession.LABELS.length || translator == null || secondLanguage == null) {
+            return;
+        }
+        try {
+            translator.translate(GuestSession.LABELS[index], new CustomLocale("en"), secondLanguage, TRANSLATOR_BEAM_SIZE, false, Global.RTranslatorMode.WALKIE_TALKIE_MODE, new Translator.TranslateListener() {
+                @Override
+                public void onTranslatedText(String textToTranslate, String translatedText, String[] synonyms, long resultID, boolean isFinal, ResultType resultType, CustomLocale inputLanguage, CustomLocale outputLanguage) {
+                    if (isFinal) {
+                        GuestSession.setLabel(index, translatedText);
+                        translateGuestLabel(index + 1);
+                    }
+                }
+
+                @Override
+                public void onFailure(int[] reasons, long value) {
+                    // the page keeps its English texts
+                }
+            });
+        } catch (Throwable ignored) {
+        }
+    }
+
     private boolean isStreamingSpeechEnabled() {
         // read every time, so a change in the settings applies without restarting the mode
         return getSharedPreferences("default", Context.MODE_PRIVATE).getBoolean("walkieTalkieStreamingTTS", true);
@@ -610,6 +679,8 @@ public class WalkieTalkieService extends VoiceTranslationService {
         mainHandler.removeCallbacks(speechStreamTimeout);
         Log.i("walkieTalkie", "WalkieTalkie service destroyed");
         saveConversationToHistory();
+        GuestSession.setHost(null);
+        GuestSession.stop();
         //disconnect speechRecognizerCallback
         speechRecognizer.removeMultiCallback(speechRecognizerCallback);
         speechRecognizer.removeCallback(speechRecognizerSingleCallback);

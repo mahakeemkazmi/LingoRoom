@@ -256,6 +256,11 @@
     <string name="history_delete_question">Delete this conversation from this phone?</string>
     <string name="preference_title_save_history">Save conversation history</string>
     <string name="preference_description_save_history">Keep conversations in History, on this phone only. Turn off to stop saving new ones.</string>
+    <string name="guest_title">Invite a guest</string>
+    <string name="guest_steps">The other person does not need the app.\n\n1. Put both phones on the same Wi-Fi, or turn on your hotspot and let them join it.\n2. They scan this code with their camera.\n\nThey will read the conversation in %1$s on their own phone and can write or dictate replies. They can also simply speak towards your phone.</string>
+    <string name="guest_no_network">Your phone is not on a Wi-Fi network.\n\nConnect to the same Wi-Fi as the other person, or turn on your hotspot and let them join it, then try again.</string>
+    <string name="guest_done">Done</string>
+    <string name="guest_end">End guest link</string>
     <string name="label_group_short">Group</string>
     <string name="home_brand_first" translatable="false">Lingo</string>
     <string name="home_brand_second" translatable="false">Room</string>
