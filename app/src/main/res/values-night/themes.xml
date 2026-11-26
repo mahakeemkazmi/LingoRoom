@@ -22,8 +22,8 @@
         <item name="colorBackgroundColoredDialog">@color/primary_very_very_dark_light</item>
         <item name="colorBackgroundDialog">@color/light_black</item>
 
-        <item name="colorBackgroundMessageSend">@color/secondary_very_very_dark</item>
-        <item name="colorBackgroundMessageReceived">@color/light_black</item>
+        <item name="colorBackgroundMessageSend">@color/primary_very_very_dark_light</item>
+        <item name="colorBackgroundMessageReceived">@color/secondary_very_very_dark</item>
 
         <item name="colorTextLevel0">@color/white</item>
         <item name="colorTextLevel1">@color/very_very_light_gray</item>
