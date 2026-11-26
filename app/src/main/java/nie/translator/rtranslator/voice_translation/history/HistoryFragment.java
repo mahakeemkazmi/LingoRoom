@@ -114,6 +114,9 @@ public class HistoryFragment extends Fragment {
     }
 
     private static String title(ConversationHistoryStore.Conversation conversation) {
+        if (conversation.secondLanguage.isEmpty()) {
+            return conversation.firstLanguage;   // a group conversation: it has a name, not a pair of languages
+        }
         return conversation.firstLanguage + "  \u2194  " + conversation.secondLanguage;
     }
 
@@ -124,7 +127,9 @@ public class HistoryFragment extends Fragment {
     private void showConversation(ConversationHistoryStore.Conversation conversation) {
         StringBuilder text = new StringBuilder();
         for (ConversationHistoryStore.Line line : conversation.lines) {
-            text.append(line.firstSpeaker ? conversation.firstLanguage : conversation.secondLanguage).append("\n");
+            if (!conversation.secondLanguage.isEmpty()) {
+                text.append(line.firstSpeaker ? conversation.firstLanguage : conversation.secondLanguage).append("\n");
+            }
             if (!line.original.isEmpty()) {
                 text.append(line.original).append("\n");
             }

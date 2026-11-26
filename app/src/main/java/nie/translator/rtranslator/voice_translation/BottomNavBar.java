@@ -86,8 +86,11 @@ public final class BottomNavBar {
             case FAVORITES:
                 activity.setFragment(VoiceTranslationActivity.FAVORITES_FRAGMENT);
                 break;
+            case OFFLINE:
+                activity.setFragment(VoiceTranslationActivity.OFFLINE_FRAGMENT);
+                break;
             default: {
-                // Offline (language downloads) and Profile both live in the settings for now
+                // Profile lives in the settings for now
                 Intent intent = new Intent(activity, SettingsActivity.class);
                 intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 activity.startActivity(intent);

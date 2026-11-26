@@ -3,4 +3,5 @@
     <!-- colors for the widget-->
     <color name="widget_background">@color/primary_very_very_dark</color>
     <color name="widget_icon">@color/primary_lite</color>
+    <color name="home_card_stroke">#668E3FD6</color>
 </resources>

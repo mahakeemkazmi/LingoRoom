@@ -83,6 +83,7 @@ public class VoiceTranslationActivity extends GeneralActivity {
     public static final int HOME_FRAGMENT = 4;
     public static final int HISTORY_FRAGMENT = 5;
     public static final int FAVORITES_FRAGMENT = 6;
+    public static final int OFFLINE_FRAGMENT = 7;
     public static final int DEFAULT_FRAGMENT = HOME_FRAGMENT;
     private boolean firstResume = true;
     //objects
@@ -276,11 +277,24 @@ public class VoiceTranslationActivity extends GeneralActivity {
                 if (getCurrentFragmentId() != HOME_FRAGMENT) {
                     HomeFragment homeFragment = new HomeFragment();
                     FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
-                    transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_CLOSE);
+                    transaction.setCustomAnimations(R.anim.screen_enter, R.anim.screen_exit);
                     transaction.replace(R.id.fragment_container, homeFragment);
                     transaction.commit();
                     currentFragment = HOME_FRAGMENT;
                     saveFragment();
+                }
+                break;
+            }
+            case OFFLINE_FRAGMENT: {
+                stopConversationService();
+                stopWalkieTalkieService();
+                global.destroyBluetoothCommunicator(null);
+                if (getCurrentFragmentId() != OFFLINE_FRAGMENT) {
+                    FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+                    transaction.setCustomAnimations(R.anim.screen_enter, R.anim.screen_exit);
+                    transaction.replace(R.id.fragment_container, new OfflineFragment());
+                    transaction.commit();
+                    currentFragment = OFFLINE_FRAGMENT;
                 }
                 break;
             }
@@ -292,7 +306,7 @@ public class VoiceTranslationActivity extends GeneralActivity {
                 if (getCurrentFragmentId() != fragmentName) {
                     HistoryFragment historyFragment = HistoryFragment.newInstance(fragmentName == FAVORITES_FRAGMENT);
                     FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
-                    transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE);
+                    transaction.setCustomAnimations(R.anim.screen_enter, R.anim.screen_exit);
                     transaction.replace(R.id.fragment_container, historyFragment);
                     transaction.commit();
                     currentFragment = fragmentName;
@@ -358,6 +372,9 @@ public class VoiceTranslationActivity extends GeneralActivity {
                 }
                 if (currentFragment.getClass().equals(HomeFragment.class)) {
                     return HOME_FRAGMENT;
+                }
+                if (currentFragment instanceof OfflineFragment) {
+                    return OFFLINE_FRAGMENT;
                 }
                 if (currentFragment instanceof HistoryFragment) {
                     return ((HistoryFragment) currentFragment).isFavoritesOnly() ? FAVORITES_FRAGMENT : HISTORY_FRAGMENT;
@@ -634,7 +651,7 @@ public class VoiceTranslationActivity extends GeneralActivity {
                 setFragment(DEFAULT_FRAGMENT);
             } else if (fragment instanceof TranslationFragment) {
                 setFragment(DEFAULT_FRAGMENT);
-            } else if (fragment instanceof HistoryFragment) {
+            } else if (fragment instanceof HistoryFragment || fragment instanceof OfflineFragment) {
                 setFragment(DEFAULT_FRAGMENT);
             }else{
                 super.onBackPressed();

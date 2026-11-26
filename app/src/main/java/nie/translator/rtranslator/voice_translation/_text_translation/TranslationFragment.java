@@ -56,6 +56,7 @@ import nie.translator.rtranslator.tools.gui.animations.CustomAnimator;
 import nie.translator.rtranslator.tools.gui.messages.GuiMessage;
 import nie.translator.rtranslator.voice_translation.FullScreenTextActivity;
 import nie.translator.rtranslator.voice_translation.VoiceTranslationActivity;
+import nie.translator.rtranslator.voice_translation.history.ConversationHistoryStore;
 import nie.translator.rtranslator.voice_translation.neural_networks.translation.Translator;
 
 public class TranslationFragment extends Fragment {
@@ -65,6 +66,44 @@ public class TranslationFragment extends Fragment {
     private Global global;
     private Translator.TranslateListener translateListener;
     private TextWatcher inputTextListener;
+    private String lastTextSavedToHistory = "";
+
+    /**
+     * Saves a finished typed translation to the History, on this phone, if the user has not turned that off.
+     */
+    private void saveToHistory(String original, String translated, CustomLocale inputLanguage, CustomLocale outputLanguage) {
+        try {
+            if (original == null || translated == null || inputLanguage == null || outputLanguage == null || getContext() == null) {
+                return;
+            }
+            final String text = original.trim();
+            if (text.isEmpty() || translated.trim().isEmpty() || (text + "|" + outputLanguage.getCode()).equals(lastTextSavedToHistory)) {
+                return;
+            }
+            final android.content.Context context = requireContext().getApplicationContext();
+            if (!ConversationHistoryStore.isEnabled(context)) {
+                return;
+            }
+            lastTextSavedToHistory = text + "|" + outputLanguage.getCode();
+            final ConversationHistoryStore.Conversation conversation = new ConversationHistoryStore.Conversation();
+            conversation.startedAt = System.currentTimeMillis();
+            conversation.firstLanguage = inputLanguage.getDisplayNameWithoutTTS();
+            conversation.secondLanguage = outputLanguage.getDisplayNameWithoutTTS();
+            ConversationHistoryStore.Line line = new ConversationHistoryStore.Line();
+            line.firstSpeaker = true;
+            line.original = text;
+            line.translated = translated.trim();
+            conversation.lines.add(line);
+            new Thread("saveTranslationHistory") {
+                @Override
+                public void run() {
+                    ConversationHistoryStore.save(context, conversation);
+                }
+            }.start();
+        } catch (Throwable ignored) {
+            // history is a convenience, it must never disturb a translation
+        }
+    }
     private TextWatcher outputTextListener;
     private TTS tts;
     private UtteranceProgressListener ttsListener;
@@ -225,6 +264,7 @@ public class TranslationFragment extends Fragment {
             public void onTranslatedText(String textToTranslate, String translatedText, String[] synonyms, long resultID, boolean isFinal, ResultType resultType, CustomLocale inputLanguage, CustomLocale outputLanguage) {
                 outputText.setText(translatedText);
                 if(isFinal){
+                    saveToHistory(textToTranslate, translatedText, inputLanguage, outputLanguage);
                     //eventually we show result type text
                     if(resultType != ResultType.NORMAL){
                         isOutputTypeVisible = true;

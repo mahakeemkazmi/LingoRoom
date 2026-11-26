@@ -27,6 +27,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import nie.translator.rtranslator.Global;
 import nie.translator.rtranslator.bluetooth.Message;
@@ -36,7 +37,10 @@ import nie.translator.rtranslator.tools.CustomLocale;
 import nie.translator.rtranslator.tools.Tools;
 import nie.translator.rtranslator.tools.gui.messages.GuiMessage;
 import nie.translator.rtranslator.tools.gui.peers.GuiPeer;
+import nie.translator.rtranslator.R;
+import nie.translator.rtranslator.voice_translation.StreamingSpeechChunker;
 import nie.translator.rtranslator.voice_translation.VoiceTranslationService;
+import nie.translator.rtranslator.voice_translation.history.ConversationHistoryStore;
 import nie.translator.rtranslator.voice_translation._conversation_mode.communication.ConversationBluetoothCommunicator;
 import nie.translator.rtranslator.voice_translation.neural_networks.NeuralNetworkApiText;
 import nie.translator.rtranslator.voice_translation.neural_networks.translation.Translator;
@@ -63,6 +67,54 @@ public class ConversationService extends VoiceTranslationService {
     private ConversationBluetoothCommunicator.Callback communicationCallback;
     private static Handler mHandler = new Handler();
     private Handler mainHandler;
+    private final HashMap<Long, StreamingSpeechChunker> speechChunkers = new HashMap<>();   // one for each message being translated
+    private final long conversationStartedAt = System.currentTimeMillis();
+
+    private boolean isStreamingSpeechEnabled() {
+        return getSharedPreferences("default", Context.MODE_PRIVATE).getBoolean("walkieTalkieStreamingTTS", true);
+    }
+
+    /**
+     * Saves the group conversation that is ending to the History, on this phone, if the user has not turned that off.
+     */
+    private void saveConversationToHistory() {
+        try {
+            final Context context = getApplicationContext();
+            if (!ConversationHistoryStore.isEnabled(context)) {
+                return;
+            }
+            final ConversationHistoryStore.Conversation conversation = new ConversationHistoryStore.Conversation();
+            conversation.startedAt = conversationStartedAt;
+            conversation.firstLanguage = getString(R.string.history_group_title);
+            conversation.secondLanguage = "";
+            for (GuiMessage message : new ArrayList<>(getMessages())) {
+                if (message == null || !message.isFinal() || message.getMessage() == null) {
+                    continue;
+                }
+                String text = message.getMessage().getText();
+                if (text == null || text.trim().isEmpty()) {
+                    continue;
+                }
+                ConversationHistoryStore.Line line = new ConversationHistoryStore.Line();
+                line.firstSpeaker = message.isMine();
+                String original = message.getMessage().getTextToTranslate();
+                line.original = original == null ? "" : original;
+                line.translated = text;
+                conversation.lines.add(line);
+            }
+            if (conversation.lines.isEmpty()) {
+                return;
+            }
+            new Thread("saveConversationHistory") {
+                @Override
+                public void run() {
+                    ConversationHistoryStore.save(context, conversation);
+                }
+            }.start();
+        } catch (Throwable ignored) {
+            // history is a convenience, it must never disturb the end of a conversation
+        }
+    }
     public static boolean isRunning = false;
 
 
@@ -180,8 +232,22 @@ public class ConversationService extends VoiceTranslationService {
                                 message.setTextToTranslate(text);
                                 message.setText(translatedText);
                                 GuiMessage guiMessage = new GuiMessage(message, inputLanguage, outputLanguage, resultID, false, isFinal);
-                                if(isFinal && CustomLocale.containsLanguage(ttsLanguages, outputLanguage) && !isAudioMute) { // check if the language can be spoken
-                                    speak(guiMessage, outputLanguage);
+                                if(CustomLocale.containsLanguage(ttsLanguages, outputLanguage) && !isAudioMute) { // check if the language can be spoken
+                                    // we speak the translation phrase by phrase while it is still being generated (as in Conversation mode)
+                                    if (isFinal || isStreamingSpeechEnabled()) {
+                                        StreamingSpeechChunker chunker = speechChunkers.get(resultID);
+                                        if (chunker == null) {
+                                            chunker = new StreamingSpeechChunker();
+                                            speechChunkers.put(resultID, chunker);
+                                        }
+                                        String chunk = chunker.nextChunk(resultID, translatedText, isFinal);
+                                        if (chunk != null) {
+                                            speak(new GuiMessage(new Message(global, message.getSender(), chunk), inputLanguage, outputLanguage, resultID, false, isFinal), outputLanguage);
+                                        }
+                                    }
+                                }
+                                if (isFinal) {
+                                    speechChunkers.remove(resultID);
                                 }
                                 notifyMessage(guiMessage);
                                 // we save every new message in the exchanged messages so that the fragment can restore them
@@ -305,6 +371,7 @@ public class ConversationService extends VoiceTranslationService {
 
     @Override
     public void onDestroy() {
+        saveConversationToHistory();
         // Stop SpeechRecognizer
         //mVoiceRecognizer.destroy();
         mVoiceRecognizer.removeCallback(mVoiceRecognizerCallback);
