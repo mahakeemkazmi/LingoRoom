@@ -54,7 +54,25 @@
   var dot = document.getElementById("dot");
   var hint = document.getElementById("hint");
   var mic = document.getElementById("mic");
+  var soundKey = null;
   var since = 0, language = "", readAloud = false, spoken = {}, rows = {}, pending = [], socket = null;
+
+  // the host phone makes the sound of each phrase, this page only plays it, one after the other
+  var player = new Audio(), queue = [], playing = false;
+  function playNext() {
+    if (playing || !queue.length) return;
+    playing = true;
+    player.src = queue.shift();
+    var promise = player.play();
+    if (promise && promise.catch) promise.catch(function () { playing = false; playNext(); });
+  }
+  player.addEventListener("ended", function () { playing = false; playNext(); });
+  player.addEventListener("error", function () { playing = false; playNext(); });
+  function enqueue(address) {
+    if (queue.length > 5) queue.shift();
+    queue.push(address);
+    playNext();
+  }
 
   function show(message) {
     var row = rows[message.key];
@@ -78,11 +96,9 @@
     row.className = "msg " + (message.host ? "them" : "me") + (message.final ? "" : " wait");
     row.textContent = message.host ? message.translated : message.original;
     list.scrollTop = list.scrollHeight;
-    if (message.host && message.final && readAloud && !spoken[message.key] && window.speechSynthesis) {
+    if (!online && message.host && message.final && message.audio && readAloud && !spoken[message.key]) {
       spoken[message.key] = true;
-      var speech = new SpeechSynthesisUtterance(message.translated);
-      if (language) speech.lang = language;
-      window.speechSynthesis.speak(speech);
+      enqueue(base + "/audio/" + encodeURIComponent(message.key));
     }
   }
 
@@ -118,11 +134,21 @@
 
   function connect() {
     socket = new WebSocket("wss://" + location.host + base + "/ws?role=guest");
+    socket.binaryType = "arraybuffer";
     socket.onopen = function () { socket.send(JSON.stringify({ type: "hello" })); reportAloud(); };
     socket.onmessage = function (event) {
-      if (typeof event.data !== "string") return;
+      if (typeof event.data !== "string") {
+        // the sound of the phrase announced just before
+        if (soundKey && readAloud && !spoken[soundKey]) {
+          spoken[soundKey] = true;
+          enqueue(URL.createObjectURL(new Blob([event.data], { type: "audio/wav" })));
+        }
+        soundKey = null;
+        return;
+      }
       try {
         var data = JSON.parse(event.data);
+        if (data.type === "audio") { soundKey = data.key; return; }
         if (data.type === "bye") { dot.className = "dot"; return; }
         if (data.messages) handle(data);
       } catch (error) {}
@@ -135,14 +161,7 @@
 
   // true if this phone reads the conversation aloud, so the host phone can stay silent for what the host says
   function hears() {
-    if (!readAloud || !window.speechSynthesis) return false;
-    var voices = window.speechSynthesis.getVoices() || [];
-    if (!voices.length || !language) return true;
-    var wanted = language.toLowerCase().split(/[-_]/)[0];
-    for (var i = 0; i < voices.length; i++) {
-      if ((voices[i].lang || "").toLowerCase().split(/[-_]/)[0] === wanted) return true;
-    }
-    return false;
+    return readAloud;
   }
 
   function reportAloud() {
@@ -152,10 +171,13 @@
   function setAloud(on) {
     readAloud = on;
     aloud.className = readAloud ? "on" : "";
-    if (readAloud && window.speechSynthesis) {
-      // browsers only allow speech after a tap, this empty phrase unlocks it
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+    if (readAloud && !playing) {
+      // browsers only allow sound after a tap: a moment of silence played now unlocks the player
+      player.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+      var promise = player.play();
+      if (promise && promise.catch) promise.catch(function () {});
     }
+    if (!readAloud) { queue = []; player.pause(); playing = false; }
     reportAloud();
   }
 
@@ -230,7 +252,7 @@
     if (talking || !socket || socket.readyState !== 1) return;
     prepareMicrophone(function () {
       if (audio.state === "suspended") audio.resume();
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      queue = []; player.pause(); playing = false;
       talking = true;
       sentSamples = 0;
       mic.className = "on";
@@ -252,17 +274,13 @@
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendText(); }
   });
   aloud.addEventListener("click", function () { setAloud(!readAloud); });
-  if (!window.speechSynthesis) {
-    aloud.style.display = "none";
-  } else {
-    // one tap is needed before a browser may speak: we ask for it as soon as the page opens
-    var start = document.getElementById("start");
-    start.style.display = "flex";
-    start.addEventListener("click", function () {
-      start.style.display = "none";
-      setAloud(true);
-    });
-  }
+  // one tap is needed before a browser may play sound: we ask for it as soon as the page opens
+  var start = document.getElementById("start");
+  start.style.display = "flex";
+  start.addEventListener("click", function () {
+    start.style.display = "none";
+    setAloud(true);
+  });
   setInterval(reportAloud, 5000);
   if (online) {
     hint.textContent = "Hold the microphone to speak";

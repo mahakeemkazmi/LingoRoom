@@ -51,6 +51,7 @@ public final class GuestServer {
         String original;
         String translated;
         boolean isFinal;
+        boolean hasAudio;
         long revision;
     }
 
@@ -58,6 +59,7 @@ public final class GuestServer {
     private final String token;
     private final LinkedHashMap<String, Entry> messages = new LinkedHashMap<>();
     private final String[] labels;
+    private final LinkedHashMap<String, byte[]> audio = new LinkedHashMap<>();   // the spoken form of the last messages
     private final ExecutorService workers = Executors.newFixedThreadPool(6);
     private ServerSocket serverSocket;
     private volatile boolean running;
@@ -216,6 +218,25 @@ public final class GuestServer {
         notifyChanged();
     }
 
+    /** Adds the spoken form (a wav file) of a message, the page of the guest plays it. */
+    public synchronized void setAudio(String key, byte[] wav) {
+        Entry entry = messages.get(key);
+        if (entry == null || wav == null) {
+            return;
+        }
+        audio.put(key, wav);
+        while (audio.size() > 6) {
+            audio.remove(audio.keySet().iterator().next());
+        }
+        entry.hasAudio = true;
+        entry.revision = ++revision;
+        notifyChanged();
+    }
+
+    private synchronized byte[] getAudio(String key) {
+        return audio.get(key);
+    }
+
     /** @return the state of the conversation as json, with only the messages changed after the given revision */
     public synchronized String eventsJson(long since) {
         StringBuilder json = new StringBuilder();
@@ -237,6 +258,7 @@ public final class GuestServer {
             json.append(",\"host\":").append(entry.host);
             json.append(",\"original\":").append(quote(entry.original));
             json.append(",\"translated\":").append(quote(entry.translated));
+            json.append(",\"audio\":").append(entry.hasAudio);
             json.append(",\"final\":").append(entry.isFinal).append('}');
         }
         json.append("]}");
@@ -320,6 +342,17 @@ public final class GuestServer {
                     }
                 }
                 respond(output, "200 OK", "application/json; charset=utf-8", eventsJson(since));
+            } else if (method.equals("GET") && target.startsWith(base + "/audio/")) {
+                byte[] wav = getAudio(target.substring(base.length() + 7));
+                if (wav == null) {
+                    respond(output, "404 Not Found", "text/plain; charset=utf-8", "not found");
+                } else {
+                    String head = "HTTP/1.1 200 OK\r\nContent-Type: audio/wav\r\nContent-Length: " + wav.length
+                            + "\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
+                    output.write(head.getBytes(StandardCharsets.ISO_8859_1));
+                    output.write(wav);
+                    output.flush();
+                }
             } else if (method.equals("POST") && target.equals(base + "/say")) {
                 if (contentLength < 0 || contentLength > MAX_BODY_BYTES) {
                     respond(output, "413 Payload Too Large", "text/plain; charset=utf-8", "too long");
