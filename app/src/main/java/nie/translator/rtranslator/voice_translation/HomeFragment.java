@@ -24,7 +24,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -72,11 +71,7 @@ public class HomeFragment extends Fragment {
         view.findViewById(R.id.homeTypeButton).setOnClickListener(v -> activity.setFragment(VoiceTranslationActivity.TRANSLATION_FRAGMENT));
         view.findViewById(R.id.homeSettingsButton).setOnClickListener(v -> openSettings());
 
-        // bottom navigation
-        view.findViewById(R.id.navHistory).setOnClickListener(v -> comingSoon(R.string.home_nav_history));
-        view.findViewById(R.id.navFavorites).setOnClickListener(v -> comingSoon(R.string.home_nav_favorites));
-        view.findViewById(R.id.navOffline).setOnClickListener(v -> openSettings());
-        view.findViewById(R.id.navProfile).setOnClickListener(v -> openSettings());
+        BottomNavBar.setup(view, activity, BottomNavBar.HOME);
     }
 
     @Override
@@ -171,7 +166,4 @@ public class HomeFragment extends Fragment {
         startActivity(intent);
     }
 
-    private void comingSoon(int nameResource) {
-        Toast.makeText(activity, getString(R.string.home_coming_soon, getString(nameResource)), Toast.LENGTH_SHORT).show();
-    }
 }

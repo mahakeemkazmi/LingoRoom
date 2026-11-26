@@ -120,6 +120,12 @@
             android:title="@string/preference_title_tts"
             android:summary="@string/preference_description_tts"
             app:iconSpaceReserved="false" />
+        <androidx.preference.SwitchPreference
+            android:defaultValue="true"
+            android:key="saveConversationHistory"
+            android:title="@string/preference_title_save_history"
+            android:summary="@string/preference_description_save_history"
+            app:iconSpaceReserved="false" />
         <nie.translator.rtranslator.settings.StreamingSpeechPreference
             android:defaultValue="true"
             android:key="walkieTalkieStreamingTTS"
