@@ -267,7 +267,7 @@
     <string name="guest_next">Next</string>
     <!-- Address of the guest relay (see the relay folder). Empty: guests can only join on the local network. -->
     <string name="guest_relay_url" translatable="false"></string>
-    <string name="guest_steps_online">The other person does not need the app, only internet on their phone.\n\nThey scan this code with their camera. Then they hold the microphone button to speak in %1$s, or write.</string>
+    <string name="guest_steps_online">The other person does not need the app, only internet on their phone.\n\nIf they are with you, they scan this code with their camera. If they are somewhere else, tap Send link. Then they hold the microphone button to speak in %1$s, or write.</string>
     <string name="guest_use_wifi">No internet</string>
     <string name="guest_use_internet">Use internet</string>
     <string name="guest_description">Guest link is on.\n\nSpeak into this phone as usual. The middle microphone listens by itself. Your guest reads and hears your words on their own phone, and their replies are spoken here.</string>
@@ -293,6 +293,8 @@
     <string name="offline_download_failed">The download did not finish. Check the internet connection and try again.</string>
     <string name="offline_one_at_a_time">Another pack is downloading. Please wait for it to finish.</string>
     <string name="offline_more_settings">More settings</string>
+    <string name="guest_send_link">Send link</string>
+    <string name="guest_send_text">Join my translated conversation on Lingo Room. Open this link, tap the yellow button, then hold the microphone to speak: %1$s</string>
     <string name="guest_done">Done</string>
     <string name="guest_end">End guest link</string>
     <string name="label_group_short">Group</string>

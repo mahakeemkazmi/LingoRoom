@@ -88,6 +88,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
     private final long conversationStartedAt = System.currentTimeMillis();
     private final EchoGuard guestEchoGuard = new EchoGuard();
     private boolean textFromGuestLink = false;   // true while we handle a text that came through the guest link, not through our mic
+    private boolean remoteHostRecognizing = false;   // true while we recognize our own user during a translated call by link
     private boolean guestRecognizing = false;   // true while we recognize what a guest said through the guest link
     private volatile double firstLanguageAudioProbability = -1;   // from the last automatic recognition, -1 if unknown
     // streaming speech (the translation is spoken phrase by phrase while it is generated)
@@ -286,8 +287,14 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     speechRecognizer.recognize(data, SPEECH_BEAM_SIZE, firstLanguage.getCode(), secondLanguage.getCode());
 
                 }else if(isMicAutomatic) {
-                    // we start the speech recognition in both languages
-                    speechRecognizer.recognize(data, SPEECH_BEAM_SIZE, firstLanguage.getCode(), secondLanguage.getCode());
+                    if (GuestSession.isRemoteGuestListening()) {
+                        // the guest is somewhere else (translated call by link): our mic only hears the first language
+                        remoteHostRecognizing = true;
+                        speechRecognizer.recognize(data, SPEECH_BEAM_SIZE, firstLanguage.getCode());
+                    } else {
+                        // we start the speech recognition in both languages
+                        speechRecognizer.recognize(data, SPEECH_BEAM_SIZE, firstLanguage.getCode(), secondLanguage.getCode());
+                    }
                 }
             }
 
@@ -337,6 +344,18 @@ public class WalkieTalkieService extends VoiceTranslationService {
         speechRecognizerSingleCallback = new RecognizerListener() {
             @Override
             public void onSpeechRecognizedResult(String text, String languageCode, double confidenceScore, boolean isFinal) {
+                if (remoteHostRecognizing && !manualRecognizingFirstLanguage && !manualRecognizingSecondLanguage
+                        && (!guestRecognizing || (languageCode != null && firstLanguage != null && languageCode.equals(firstLanguage.getCode())))) {
+                    // what our own user said during a translated call by link
+                    remoteHostRecognizing = false;
+                    if (text == null || text.trim().isEmpty()) {
+                        startVoiceRecorder();
+                        notifyMicActivated();
+                    } else {
+                        translate(text, firstLanguage, secondLanguage, TRANSLATOR_BEAM_SIZE, false, firstResultTranslateListener);
+                    }
+                    return;
+                }
                 if (guestRecognizing && !manualRecognizingFirstLanguage && !manualRecognizingSecondLanguage) {
                     // what a guest said through the guest link
                     guestRecognizing = false;
@@ -361,8 +380,9 @@ public class WalkieTalkieService extends VoiceTranslationService {
 
             @Override
             public void onError(int[] reasons, long value) {
-                boolean wasGuest = guestRecognizing;
+                boolean wasGuest = guestRecognizing || remoteHostRecognizing;
                 guestRecognizing = false;
+                remoteHostRecognizing = false;
                 manualRecognizingFirstLanguage = false;
                 manualRecognizingSecondLanguage = false;
                 if (wasGuest) {
