@@ -71,6 +71,7 @@ public class HomeFragment extends Fragment {
         view.findViewById(R.id.homeStartButton).setOnClickListener(v -> activity.setFragment(VoiceTranslationActivity.WALKIE_TALKIE_FRAGMENT, true));
         view.findViewById(R.id.homeTypeButton).setOnClickListener(v -> activity.setFragment(VoiceTranslationActivity.TRANSLATION_FRAGMENT));
         view.findViewById(R.id.homeSettingsButton).setOnClickListener(v -> openSettings());
+        view.findViewById(R.id.homeCallButton).setOnClickListener(v -> showCallMode());
 
         BottomNavBar.setup(view, activity, BottomNavBar.HOME);
     }
@@ -159,6 +160,30 @@ public class HomeFragment extends Fragment {
                 }
             }
         }.start();
+    }
+
+    /**
+     * Experimental: interpreting a normal phone call that is on loudspeaker.
+     */
+    private void showCallMode() {
+        boolean enabled = CallAssistService.isEnabled(activity);
+        AlertDialog.Builder builder = new AlertDialog.Builder(activity)
+                .setTitle(R.string.call_mode_title)
+                .setMessage(getString(enabled ? R.string.call_mode_ready : R.string.call_mode_setup))
+                .setNegativeButton(android.R.string.cancel, null);
+        if (enabled) {
+            builder.setPositiveButton(R.string.home_start, (dialog, which) -> activity.setFragment(VoiceTranslationActivity.WALKIE_TALKIE_FRAGMENT, true));
+        } else {
+            builder.setPositiveButton(R.string.call_mode_open_settings, (dialog, which) -> {
+                try {
+                    Intent intent = new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                } catch (Throwable ignored) {
+                }
+            });
+        }
+        builder.show();
     }
 
     private void openSettings() {

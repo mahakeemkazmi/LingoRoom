@@ -108,6 +108,19 @@
         <service android:name="nie.translator.rtranslator.voice_translation._walkie_talkie_mode._walkie_talkie.WalkieTalkieService"
             android:foregroundServiceType="dataSync|microphone"/>
         <service android:name="nie.translator.rtranslator.GeneralService" />
+        <!-- Experimental call mode: lets the app keep listening during a phone call on loudspeaker -->
+        <service
+            android:name="nie.translator.rtranslator.voice_translation.CallAssistService"
+            android:exported="true"
+            android:label="@string/call_assist_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/call_assist_service" />
+        </service>
         <service android:name=".downloader.DownloaderService"
             android:foregroundServiceType="dataSync" />
 
