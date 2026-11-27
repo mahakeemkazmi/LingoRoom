@@ -26,6 +26,7 @@ import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -186,11 +187,9 @@ public class WalkieTalkieService extends VoiceTranslationService {
                                         public void onDetectedText(final NeuralNetworkApiResult result) {
                                             // here the result returns with the same language as the text sent from the Fragment editText
                                             if (result.getLanguage().equalsLanguage(firstLanguage)) {
-                                                expectSpeaker(HOST_SPEAKER);
-                                                translator.translate(result.getText(), firstLanguage, secondLanguage, TRANSLATOR_BEAM_SIZE, false, Global.RTranslatorMode.WALKIE_TALKIE_MODE, firstResultTranslateListener);
+                                                enqueueTranslation(result.getText(), firstLanguage, secondLanguage, firstResultTranslateListener, HOST_SPEAKER);
                                             } else {
-                                                expectSpeaker(HOST_SPEAKER);
-                                                translator.translate(result.getText(), secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, Global.RTranslatorMode.WALKIE_TALKIE_MODE, secondResultTranslateListener);
+                                                enqueueTranslation(result.getText(), secondLanguage, firstLanguage, secondResultTranslateListener, HOST_SPEAKER);
                                             }
                                         }
 
@@ -300,7 +299,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                 }else if(isMicAutomatic) {
                     if (GuestSession.isRemoteGuestListening()) {
                         // the guests are somewhere else: our mic only hears our own user, in the first language
-                        pendingSingleRecognitions.add(new Object[]{null, Boolean.TRUE});
+                        pendingSingleRecognitions.add(new Object[]{null, firstLanguage.getCode()});
                         speechRecognizer.recognize(data, SPEECH_BEAM_SIZE, firstLanguage.getCode());
                     } else {
                         // we start the speech recognition in both languages
@@ -359,7 +358,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     // a recognition we asked for in one language: our own user in a room with guests somewhere else, or a guest
                     Object[] request = pendingSingleRecognitions.poll();
                     String[] guest = (String[]) request[0];
-                    boolean fromFirstLanguage = request[1] == Boolean.TRUE;
+                    CustomLocale source = firstLanguage == null || secondLanguage == null ? null : localeForGuest((String) request[1]);
                     if (guest != null) {
                         guestRecognizing = false;
                     }
@@ -371,10 +370,10 @@ public class WalkieTalkieService extends VoiceTranslationService {
                             textFromGuestLink = true;
                             currentGuestSpeaker = guest;
                         }
-                        if (fromFirstLanguage) {
+                        if (source == firstLanguage) {
                             translate(text, firstLanguage, secondLanguage, TRANSLATOR_BEAM_SIZE, false, firstResultTranslateListener);
                         } else {
-                            translate(text, secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
+                            translate(text, source, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
                         }
                         textFromGuestLink = false;
                     }
@@ -420,7 +419,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onSuccess(ArrayList<CustomLocale> ttsLanguages) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, true, isFinal);
-                        publishToGuests(true, resultID, textToTranslate, translatedText, isFinal);
+                        publishToGuests(true, resultID, textToTranslate, translatedText, isFinal, inputLanguage, outputLanguage);
                         if (isFinal && GuestSession.isActive()) {
                             guestEchoGuard.remember(translatedText, System.currentTimeMillis());
                         }
@@ -440,7 +439,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onFailure(int[] reasons, long value) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, true, isFinal);
-                        publishToGuests(true, resultID, textToTranslate, translatedText, isFinal);
+                        publishToGuests(true, resultID, textToTranslate, translatedText, isFinal, inputLanguage, outputLanguage);
                         if (isFinal && GuestSession.isActive()) {
                             guestEchoGuard.remember(translatedText, System.currentTimeMillis());
                         }
@@ -473,7 +472,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onSuccess(ArrayList<CustomLocale> ttsLanguages) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, false, isFinal);
-                        publishToGuests(false, resultID, textToTranslate, translatedText, isFinal);
+                        publishToGuests(false, resultID, textToTranslate, translatedText, isFinal, inputLanguage, outputLanguage);
                         // we speak the translation phrase by phrase while it is still being generated
                         boolean canSpeak = CustomLocale.containsLanguage(ttsLanguages, outputLanguage);
                         boolean restartMic = speakStreaming(textToTranslate, translatedText, resultID, false, isFinal, inputLanguage, outputLanguage, canSpeak);
@@ -490,7 +489,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onFailure(int[] reasons, long value) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), firstLanguage, outputLanguage, resultID, false, isFinal);
-                        publishToGuests(false, resultID, textToTranslate, translatedText, isFinal);
+                        publishToGuests(false, resultID, textToTranslate, translatedText, isFinal, inputLanguage, outputLanguage);
                         WalkieTalkieService.super.notifyMessage(message);
                         // we save every new message in the exchanged messages so that the fragment can restore them
                         WalkieTalkieService.super.addOrUpdateMessage(message);
@@ -607,6 +606,8 @@ public class WalkieTalkieService extends VoiceTranslationService {
                 }
                 ConversationHistoryStore.Line line = new ConversationHistoryStore.Line();
                 line.firstSpeaker = message.isMine();
+                String[] speaker = speakers.get((message.isMine() ? "a" : "b") + message.getMessageID());
+                line.name = speaker == null ? "" : speaker[1];
                 String original = message.getMessage().getTextToTranslate();
                 line.original = original == null ? "" : original;
                 line.translated = translated;
@@ -636,6 +637,91 @@ public class WalkieTalkieService extends VoiceTranslationService {
     // what guests said while another guest was being recognized: {samples, language code, guest}
     private final ArrayDeque<Object[]> waitingGuestAudio = new ArrayDeque<>();
 
+    // translations run one at a time, in the order they were asked for: the translator can not do two at once,
+    // and a room asks for several (one for each language of the room, plus the texts of the guest page)
+    private final ArrayDeque<Runnable> translationJobs = new ArrayDeque<>();
+    private boolean translationRunning = false;
+    private int translationGeneration = 0;
+
+    /**
+     * @param speaker who said the text if the result is a message of the conversation, null for anything else
+     */
+    private void enqueueTranslation(final String text, final CustomLocale input, final CustomLocale output, final Translator.TranslateListener listener, @Nullable final String[] speaker) {
+        synchronized (translationJobs) {
+            if (translationJobs.size() > 60) {
+                translationJobs.clear();   // something is very wrong: we do not let old work pile up
+            }
+            translationJobs.add(new Runnable() {
+                @Override
+                public void run() {
+                    final int generation = translationGeneration;
+                    if (speaker != null) {
+                        expectSpeaker(speaker);
+                    }
+                    // safety net: a translation that never ends must not block the ones after it
+                    mainHandler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            translationDone(generation);
+                        }
+                    }, 45000);
+                    try {
+                        translator.translate(text, input, output, TRANSLATOR_BEAM_SIZE, false, Global.RTranslatorMode.WALKIE_TALKIE_MODE, new Translator.TranslateListener() {
+                            @Override
+                            public void onTranslatedText(String textToTranslate, String translatedText, String[] synonyms, long resultID, boolean isFinal, ResultType resultType, CustomLocale inputLanguage, CustomLocale outputLanguage) {
+                                listener.onTranslatedText(textToTranslate, translatedText, synonyms, resultID, isFinal, resultType, inputLanguage, outputLanguage);
+                                if (isFinal) {
+                                    translationDone(generation);
+                                }
+                            }
+
+                            @Override
+                            public void onFailure(int[] reasons, long value) {
+                                listener.onFailure(reasons, value);
+                                translationDone(generation);
+                            }
+                        });
+                    } catch (Throwable error) {
+                        translationDone(generation);
+                    }
+                }
+            });
+        }
+        startNextTranslation();
+    }
+
+    private void startNextTranslation() {
+        Runnable job;
+        synchronized (translationJobs) {
+            if (translationRunning) {
+                return;
+            }
+            job = translationJobs.poll();
+            if (job == null) {
+                return;
+            }
+            translationRunning = true;
+        }
+        job.run();
+    }
+
+    private void translationDone(int generation) {
+        synchronized (translationJobs) {
+            if (generation != translationGeneration) {
+                return;   // already counted (the safety net of a translation that ended in time)
+            }
+            translationGeneration++;
+            translationRunning = false;
+        }
+        // the next one always starts from the main thread, like everything else in this service
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                startNextTranslation();
+            }
+        });
+    }
+
     private void expectSpeaker(String[] speaker) {
         if (!GuestSession.isActive()) {
             pendingSpeakers.clear();
@@ -653,11 +739,12 @@ public class WalkieTalkieService extends VoiceTranslationService {
     }
 
     /**
-     * Shows a message (or its growing translation) to the guests of the room.
+     * Shows a message (or its growing translation) to the guests of the room, and asks for its translation
+     * into the other languages chosen by guests.
      * @param firstToSecond true if it was said in the first language
      */
-    private void publishToGuests(boolean firstToSecond, long resultID, String original, String translated, boolean isFinal) {
-        if (!GuestSession.isActive() || firstLanguage == null || secondLanguage == null) {
+    private void publishToGuests(boolean firstToSecond, long resultID, String original, String translated, boolean isFinal, CustomLocale inputLanguage, CustomLocale outputLanguage) {
+        if (!GuestSession.isActive() || firstLanguage == null || secondLanguage == null || inputLanguage == null || outputLanguage == null) {
             return;
         }
         String key = (firstToSecond ? "a" : "b") + resultID;
@@ -673,12 +760,83 @@ public class WalkieTalkieService extends VoiceTranslationService {
             }
             speakers.put(key, speaker);
         }
-        String originalLanguage = (firstToSecond ? firstLanguage : secondLanguage).getCode();
-        String translatedLanguage = (firstToSecond ? secondLanguage : firstLanguage).getCode();
+        String originalLanguage = inputLanguage.getCode();
+        String translatedLanguage = outputLanguage.getCode();
         GuestSession.publish(key, speaker[0], speaker[1], original, originalLanguage, translated, translatedLanguage, isFinal);
-        if (isNew && !GuestSession.isSameRoom() && GuestSession.isGuestListening()) {
+        if (!isNew) {
+            return;
+        }
+        if (!GuestSession.isSameRoom() && GuestSession.isGuestListening()) {
             // guests somewhere else who chose the language of the speaker did not hear the speaker: their phones say it
             GuestSession.speak(original, originalLanguage, speaker[0]);
+        }
+        // the other languages in use in the room: one more translation each
+        ArrayList<String> others = GuestSession.getExtraLanguages(firstLanguage.getCode(), secondLanguage.getCode());
+        if (GuestSession.isChosen(secondLanguage.getCode())) {
+            others.add(0, secondLanguage.getCode());
+        }
+        for (String code : others) {
+            if (!code.equals(originalLanguage) && !code.equals(translatedLanguage)) {
+                translateForRoom(key, original, inputLanguage, code, speaker[0]);
+            }
+        }
+    }
+
+    private final ArrayList<String> labelLanguages = new ArrayList<>();   // the extra languages whose page texts are (being) translated
+
+    /**
+     * Translates a message into one more language of the room and lets the guests who chose it read and hear it.
+     */
+    private void translateForRoom(final String key, String original, CustomLocale inputLanguage, final String code, final String from) {
+        final CustomLocale target;
+        try {
+            target = CustomLocale.getInstance(code);
+        } catch (Throwable error) {
+            return;
+        }
+        if (target == null) {
+            return;
+        }
+        final StreamingSpeechChunker chunker = new StreamingSpeechChunker();
+        enqueueTranslation(original, inputLanguage, target, new Translator.TranslateListener() {
+            @Override
+            public void onTranslatedText(String textToTranslate, String translatedText, String[] synonyms, long resultID, boolean isFinal, ResultType resultType, CustomLocale inputLanguage, CustomLocale outputLanguage) {
+                GuestSession.publishExtra(key, code, translatedText);
+                if (GuestSession.isGuestListening() && (isFinal || isStreamingSpeechEnabled())) {
+                    String chunk = chunker.nextChunk(resultID, translatedText, isFinal);
+                    if (chunk != null) {
+                        GuestSession.speak(chunk, code, from);
+                    }
+                }
+            }
+
+            @Override
+            public void onFailure(int[] reasons, long value) {
+                // the guests of that language keep waiting for this message, the conversation goes on
+            }
+        }, null);
+        if (!labelLanguages.contains(code)) {
+            // first message for this language: its guests still see the page in English
+            labelLanguages.add(code);
+            translateGuestLabel(target, 0, null);
+        }
+    }
+
+    /**
+     * @return the language a guest uses: one of the two main languages of the room, or another language chosen on the page
+     */
+    private CustomLocale localeForGuest(String code) {
+        if (code == null || code.isEmpty() || code.equals(secondLanguage.getCode())) {
+            return secondLanguage;
+        }
+        if (code.equals(firstLanguage.getCode())) {
+            return firstLanguage;
+        }
+        try {
+            CustomLocale other = CustomLocale.getInstance(code);
+            return other == null ? secondLanguage : other;
+        } catch (Throwable error) {
+            return secondLanguage;
         }
     }
 
@@ -698,10 +856,11 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     stopVoiceRecorder();
                     textFromGuestLink = true;
                     currentGuestSpeaker = new String[]{id, name};
-                    if (firstLanguage.getCode().equals(language)) {
+                    CustomLocale source = localeForGuest(language);
+                    if (source == firstLanguage) {
                         translate(text, firstLanguage, secondLanguage, TRANSLATOR_BEAM_SIZE, false, firstResultTranslateListener);
                     } else {
-                        translate(text, secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
+                        translate(text, source, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
                     }
                     textFromGuestLink = false;
                 }
@@ -729,8 +888,45 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     if (firstLanguage == null || secondLanguage == null) {
                         return;
                     }
-                    GuestSession.setLanguages(firstLanguage.getCode(), firstLanguage.getDisplayNameWithoutTTS(), secondLanguage.getCode(), secondLanguage.getDisplayNameWithoutTTS());
-                    translateGuestLabel(secondLanguage, 0, firstLanguage);
+                    final CustomLocale first = firstLanguage;
+                    final CustomLocale second = secondLanguage;
+                    final Global global = (Global) getApplication();
+                    new Thread("roomLanguages") {
+                        @Override
+                        public void run() {
+                            // the two main languages first, then every other language this phone can listen to and translate
+                            final ArrayList<String> list = new ArrayList<>();
+                            list.add(first.getCode());
+                            list.add(first.getDisplayNameWithoutTTS());
+                            list.add(second.getCode());
+                            list.add(second.getDisplayNameWithoutTTS());
+                            try {
+                                ArrayList<CustomLocale> all = new ArrayList<>(global.getLanguages(Global.RTranslatorMode.WALKIE_TALKIE_MODE, true));
+                                java.util.Collections.sort(all, new java.util.Comparator<CustomLocale>() {
+                                    @Override
+                                    public int compare(CustomLocale a, CustomLocale b) {
+                                        return a.getDisplayNameWithoutTTS().compareToIgnoreCase(b.getDisplayNameWithoutTTS());
+                                    }
+                                });
+                                for (CustomLocale language : all) {
+                                    if (language != null && language.getCode() != null && !language.getCode().equals(first.getCode()) && !language.getCode().equals(second.getCode())) {
+                                        list.add(language.getCode());
+                                        list.add(language.getDisplayNameWithoutTTS());
+                                    }
+                                }
+                            } catch (Throwable ignored) {
+                                // the room then offers only its two main languages
+                            }
+                            mainHandler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    GuestSession.setLanguages(list.toArray(new String[0]));
+                                    labelLanguages.clear();
+                                    translateGuestLabel(second, 0, first);
+                                }
+                            });
+                        }
+                    }.start();
                 }
             });
         }
@@ -744,11 +940,11 @@ public class WalkieTalkieService extends VoiceTranslationService {
             return;
         }
         Object[] next = waitingGuestAudio.poll();
-        boolean fromFirstLanguage = firstLanguage.getCode().equals(next[1]);
+        CustomLocale source = localeForGuest((String) next[1]);
         stopVoiceRecorder();
         guestRecognizing = true;
-        pendingSingleRecognitions.add(new Object[]{next[2], fromFirstLanguage ? Boolean.TRUE : Boolean.FALSE});
-        speechRecognizer.recognize((float[]) next[0], SPEECH_BEAM_SIZE, (fromFirstLanguage ? firstLanguage : secondLanguage).getCode());
+        pendingSingleRecognitions.add(new Object[]{next[2], source.getCode()});
+        speechRecognizer.recognize((float[]) next[0], SPEECH_BEAM_SIZE, source.getCode());
     }
 
     /**
@@ -765,7 +961,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
             return;
         }
         try {
-            translator.translate(GuestSession.LABELS[index], new CustomLocale("en"), language, TRANSLATOR_BEAM_SIZE, false, Global.RTranslatorMode.WALKIE_TALKIE_MODE, new Translator.TranslateListener() {
+            enqueueTranslation(GuestSession.LABELS[index], new CustomLocale("en"), language, new Translator.TranslateListener() {
                 @Override
                 public void onTranslatedText(String textToTranslate, String translatedText, String[] synonyms, long resultID, boolean isFinal, ResultType resultType, CustomLocale inputLanguage, CustomLocale outputLanguage) {
                     if (isFinal) {
@@ -778,7 +974,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                 public void onFailure(int[] reasons, long value) {
                     // the page keeps its English texts
                 }
-            });
+            }, null);
         } catch (Throwable ignored) {
         }
     }
@@ -927,9 +1123,8 @@ public class WalkieTalkieService extends VoiceTranslationService {
             notifyMicActivated();
             return;
         }
-        expectSpeaker(textFromGuestLink && currentGuestSpeaker != null ? currentGuestSpeaker : HOST_SPEAKER);
         if(!isMetaText(textToTranslate)) {
-            translator.translate(textToTranslate, languageInput, languageOutput, beamSize, saveResults, Global.RTranslatorMode.WALKIE_TALKIE_MODE, responseListener);
+            enqueueTranslation(textToTranslate, languageInput, languageOutput, responseListener, textFromGuestLink && currentGuestSpeaker != null ? currentGuestSpeaker : HOST_SPEAKER);
         }else{
             Log.i("walkieTalkie", "skipped translation of: "+textToTranslate+" because it is meta text");
             //we restart the mic here

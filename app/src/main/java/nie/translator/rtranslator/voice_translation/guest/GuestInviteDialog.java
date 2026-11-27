@@ -207,6 +207,34 @@ public final class GuestInviteDialog {
             params.topMargin = dp(activity, 8);
             content.addView(sendButton, params);
         }
+        if (link != null && canSend) {
+            // the link of this phone stays the same, so a meeting can be planned with it
+            Button calendarButton = new Button(activity);
+            calendarButton.setText(R.string.guest_calendar);
+            calendarButton.setOnClickListener(v -> {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_INSERT);
+                    intent.setData(android.provider.CalendarContract.Events.CONTENT_URI);
+                    intent.putExtra(android.provider.CalendarContract.Events.TITLE, activity.getString(R.string.guest_calendar_title));
+                    intent.putExtra(android.provider.CalendarContract.Events.DESCRIPTION, activity.getString(R.string.guest_send_text, link));
+                    activity.startActivity(intent);
+                } catch (Throwable error) {
+                    Toast.makeText(activity, R.string.guest_calendar_missing, Toast.LENGTH_LONG).show();
+                }
+            });
+            content.addView(calendarButton, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            Button changeButton = new Button(activity);
+            changeButton.setText(R.string.guest_change_link);
+            changeButton.setOnClickListener(v -> new AlertDialog.Builder(activity)
+                    .setMessage(R.string.guest_change_link_question)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(R.string.guest_change_link, (dialog, which) -> {
+                        GuestSession.changeLink(activity.getApplicationContext());
+                        Toast.makeText(activity, R.string.guest_change_link_done, Toast.LENGTH_LONG).show();
+                    })
+                    .show());
+            content.addView(changeButton, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
         ScrollView scroll = new ScrollView(activity);
         scroll.addView(content);
         return scroll;
