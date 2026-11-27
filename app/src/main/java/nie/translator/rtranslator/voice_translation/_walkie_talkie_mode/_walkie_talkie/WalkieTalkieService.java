@@ -116,6 +116,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
         super.onCreate();
         translator = ((Global) getApplication()).getTranslator();
         GuestSession.setHost(guestHost);
+        GuestSession.findBestAddress(getApplicationContext());
         speechRecognizer = ((Global) getApplication()).getSpeechRecognizer();
         SharedPreferences sharedPreferences = this.getSharedPreferences("default", Context.MODE_PRIVATE);
         isAudioMute = !sharedPreferences.getBoolean("walkieTalkieAutoTTS", true);

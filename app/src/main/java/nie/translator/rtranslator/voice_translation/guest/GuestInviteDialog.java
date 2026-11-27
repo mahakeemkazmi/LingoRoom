@@ -25,7 +25,9 @@ import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.widget.Button;
+import android.text.InputType;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -91,7 +93,7 @@ public final class GuestInviteDialog {
         }
         AlertDialog.Builder builder = new AlertDialog.Builder(activity)
                 .setTitle(R.string.guest_title)
-                .setView(content(activity, steps, address, address, online))
+                .setView(content(activity, steps, online ? address + "#" + GuestSession.getPin(activity) : address, address, online))
                 .setPositiveButton(R.string.guest_done, null)
                 .setNegativeButton(R.string.guest_end, (dialog, which) -> {
                     GuestSession.stop();
@@ -181,6 +183,48 @@ public final class GuestInviteDialog {
             content.addView(linkView);
         }
         if (link != null && canSend) {
+            // the PIN guests type after opening the link (the code above already contains it)
+            TextView pinView = new TextView(activity);
+            pinView.setText(activity.getString(R.string.guest_pin, GuestSession.getPin(activity)));
+            pinView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+            pinView.setGravity(Gravity.CENTER);
+            pinView.setPadding(0, dp(activity, 6), 0, 0);
+            content.addView(pinView);
+
+            // the end of the link is a name the host can choose
+            LinearLayout nameRow = new LinearLayout(activity);
+            nameRow.setOrientation(LinearLayout.HORIZONTAL);
+            nameRow.setGravity(Gravity.CENTER_VERTICAL);
+            final EditText nameInput = new EditText(activity);
+            nameInput.setHint(R.string.guest_room_name_hint);
+            nameInput.setSingleLine(true);
+            nameInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+            nameInput.setText(GuestSession.getRoomName(activity));
+            nameRow.addView(nameInput, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+            Button nameButton = new Button(activity);
+            nameButton.setText(R.string.guest_room_name_save);
+            nameButton.setOnClickListener(v -> {
+                final String name = nameInput.getText().toString().trim().toLowerCase(java.util.Locale.ROOT);
+                if (!GuestSession.isValidRoomName(name)) {
+                    Toast.makeText(activity, R.string.guest_room_name_invalid, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                final android.content.Context context = activity.getApplicationContext();
+                new Thread("roomName") {
+                    @Override
+                    public void run() {
+                        final int result = GuestSession.renameRoom(context, name);
+                        new Handler(Looper.getMainLooper()).post(() -> {
+                            int message = result == 0 ? R.string.guest_room_name_done : result == 1 ? R.string.guest_room_name_taken : R.string.guest_room_name_failed;
+                            Toast.makeText(context, message, Toast.LENGTH_LONG).show();
+                        });
+                    }
+                }.start();
+            });
+            nameRow.addView(nameButton);
+            content.addView(nameRow, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
+        if (link != null && canSend) {
             // decides whether this phone listens for both languages and whether the guests need to hear the originals
             CheckBox together = new CheckBox(activity);
             together.setText(R.string.guest_same_room);
@@ -198,7 +242,7 @@ public final class GuestInviteDialog {
                 try {
                     Intent intent = new Intent(Intent.ACTION_SEND);
                     intent.setType("text/plain");
-                    intent.putExtra(Intent.EXTRA_TEXT, activity.getString(R.string.guest_send_text, link));
+                    intent.putExtra(Intent.EXTRA_TEXT, activity.getString(R.string.guest_send_text, link, GuestSession.getPin(activity)));
                     activity.startActivity(Intent.createChooser(intent, activity.getString(R.string.guest_send_link)));
                 } catch (Throwable ignored) {
                 }
@@ -216,7 +260,7 @@ public final class GuestInviteDialog {
                     Intent intent = new Intent(Intent.ACTION_INSERT);
                     intent.setData(android.provider.CalendarContract.Events.CONTENT_URI);
                     intent.putExtra(android.provider.CalendarContract.Events.TITLE, activity.getString(R.string.guest_calendar_title));
-                    intent.putExtra(android.provider.CalendarContract.Events.DESCRIPTION, activity.getString(R.string.guest_send_text, link));
+                    intent.putExtra(android.provider.CalendarContract.Events.DESCRIPTION, activity.getString(R.string.guest_send_text, link, GuestSession.getPin(activity)));
                     activity.startActivity(intent);
                 } catch (Throwable error) {
                     Toast.makeText(activity, R.string.guest_calendar_missing, Toast.LENGTH_LONG).show();
