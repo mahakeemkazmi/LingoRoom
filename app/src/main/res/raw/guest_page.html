@@ -120,12 +120,15 @@
       list.appendChild(row);
       if (mine) {
         // the temporary bubble of what this person just wrote or said is replaced by the real one
-        for (var i = 0; i < pending.length; i++) {
-          if (pending[i].text === null || pending[i].text === message.original) {
-            pending[i].row.remove();
-            pending.splice(i, 1);
-            break;
-          }
+        var found = -1;
+        for (var i = 0; i < pending.length && found < 0; i++) {
+          if (pending[i].text === null || pending[i].text === message.original) found = i;
+        }
+        // the host may have corrected a name in the text, so the oldest waiting bubble goes if none matches exactly
+        if (found < 0 && pending.length) found = 0;
+        if (found >= 0) {
+          pending[found].row.remove();
+          pending.splice(found, 1);
         }
       }
     }

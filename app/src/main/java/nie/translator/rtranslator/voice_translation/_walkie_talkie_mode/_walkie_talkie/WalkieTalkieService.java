@@ -46,6 +46,7 @@ import nie.translator.rtranslator.voice_translation.guest.EchoGuard;
 import nie.translator.rtranslator.voice_translation.guest.GuestServer;
 import nie.translator.rtranslator.voice_translation.guest.GuestSession;
 import nie.translator.rtranslator.voice_translation.history.ConversationHistoryStore;
+import nie.translator.rtranslator.voice_translation.words.MyWords;
 import nie.translator.rtranslator.voice_translation.StreamingSpeechChunker;
 import nie.translator.rtranslator.voice_translation.VoiceTranslationService;
 import nie.translator.rtranslator.voice_translation.neural_networks.NeuralNetworkApiResult;
@@ -647,7 +648,15 @@ public class WalkieTalkieService extends VoiceTranslationService {
     /**
      * @param speaker who said the text if the result is a message of the conversation, null for anything else
      */
-    private void enqueueTranslation(final String text, final CustomLocale input, final CustomLocale output, final Translator.TranslateListener listener, @Nullable final String[] speaker) {
+    private void enqueueTranslation(String heardText, final CustomLocale input, final CustomLocale output, final Translator.TranslateListener listener, @Nullable final String[] speaker) {
+        // names and places from the "My words" list are put right in what was heard and in the translation,
+        // and Deccani words are made standard before the translator sees them
+        final MyWords myWords = speaker == null ? null : getMyWords();
+        final String text = myWords == null || input == null ? heardText : myWords.fixHeard(heardText, input.getCode());
+        if (myWords != null) {
+            learnWordForms(myWords, input);
+            learnWordForms(myWords, output);
+        }
         synchronized (translationJobs) {
             if (translationJobs.size() > 60) {
                 translationJobs.clear();   // something is very wrong: we do not let old work pile up
@@ -670,7 +679,8 @@ public class WalkieTalkieService extends VoiceTranslationService {
                         translator.translate(text, input, output, TRANSLATOR_BEAM_SIZE, false, Global.RTranslatorMode.WALKIE_TALKIE_MODE, new Translator.TranslateListener() {
                             @Override
                             public void onTranslatedText(String textToTranslate, String translatedText, String[] synonyms, long resultID, boolean isFinal, ResultType resultType, CustomLocale inputLanguage, CustomLocale outputLanguage) {
-                                listener.onTranslatedText(textToTranslate, translatedText, synonyms, resultID, isFinal, resultType, inputLanguage, outputLanguage);
+                                String fixed = myWords == null || outputLanguage == null ? translatedText : myWords.fix(translatedText, outputLanguage.getCode());
+                                listener.onTranslatedText(textToTranslate, fixed, synonyms, resultID, isFinal, resultType, inputLanguage, outputLanguage);
                                 if (isFinal) {
                                     translationDone(generation);
                                 }
@@ -689,6 +699,43 @@ public class WalkieTalkieService extends VoiceTranslationService {
             });
         }
         startNextTranslation();
+    }
+
+    private MyWords myWordsList = null;
+    private final ArrayList<String> wordFormsAsked = new ArrayList<>();
+
+    private MyWords getMyWords() {
+        if (myWordsList == null) {
+            myWordsList = new MyWords(getApplicationContext());
+        }
+        return myWordsList;
+    }
+
+    /**
+     * Asks the translator, once, how the words of the list typed in English are written in a language with another
+     * script. The answers are remembered on the phone and used from the next sentence on.
+     */
+    private void learnWordForms(final MyWords myWords, @Nullable final CustomLocale language) {
+        if (language == null || language.getCode() == null || wordFormsAsked.contains(language.getCode())) {
+            return;
+        }
+        wordFormsAsked.add(language.getCode());
+        final String code = language.getCode();
+        for (final String word : myWords.wordsWithoutForm(code)) {
+            enqueueTranslation(word, new CustomLocale("en"), language, new Translator.TranslateListener() {
+                @Override
+                public void onTranslatedText(String textToTranslate, String translatedText, String[] synonyms, long resultID, boolean isFinal, ResultType resultType, CustomLocale inputLanguage, CustomLocale outputLanguage) {
+                    if (isFinal) {
+                        myWords.setForm(code, word, translatedText);
+                    }
+                }
+
+                @Override
+                public void onFailure(int[] reasons, long value) {
+                    // we will ask again in the next conversation
+                }
+            }, null);
+        }
     }
 
     private void startNextTranslation() {
