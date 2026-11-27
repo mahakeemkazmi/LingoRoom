@@ -197,6 +197,9 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
                     GuestInviteDialog.show(activity, guestLanguage == null ? "" : guestLanguage.getDisplayNameWithoutTTS(), new Runnable() {
                         @Override
                         public void run() {
+                            if (mAdapter != null) {
+                                mAdapter.notifyDataSetChanged();   // the cards show one language or two depending on the guest link
+                            }
                             if (description != null && isAdded()) {
                                 description.setText(GuestSession.isActive() ? R.string.guest_description : R.string.description_walkie_talkie);
                             }

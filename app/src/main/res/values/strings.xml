@@ -270,7 +270,7 @@
     <string name="guest_steps_online">The other person does not need the app, only internet on their phone.\n\nIf they are with you, they scan this code with their camera. If they are somewhere else, tap Send link. Then they hold the microphone button to speak in %1$s, or write.</string>
     <string name="guest_use_wifi">No internet</string>
     <string name="guest_use_internet">Use internet</string>
-    <string name="guest_description">Guest link is on.\n\nSpeak into this phone as usual. The middle microphone listens by itself. Your guest reads and hears your words on their own phone, and their replies are spoken here.</string>
+    <string name="guest_description">Guest link is on.\n\nSpeak into this phone as usual. The middle microphone listens by itself. Your guest reads and hears your words on their own phone, and their replies are spoken here. While the guest link is on, this screen shows only your language.</string>
     <string name="status_preparing">Getting ready</string>
     <string name="status_listening">Listening. Speak in %1$s or %2$s</string>
     <string name="status_hearing">Hearing you</string>
