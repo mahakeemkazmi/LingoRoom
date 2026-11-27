@@ -323,6 +323,12 @@
     <string name="call_mode_open_settings">Open settings</string>
     <string name="preference_title_noise">Reduce background noise (experimental)</string>
     <string name="preference_description_noise">Uses the noise filter of your phone while listening. Try it in noisy places. Leave and reopen the conversation after changing it.</string>
+    <string name="my_words_title">My words</string>
+    <string name="my_words_summary">Names and places the app must always get right</string>
+    <string name="my_words_explanation">One name or place on each line, written the way it should appear. When the app hears or writes something close to one of them, it uses your spelling. Leave and reopen the conversation after changing the list.</string>
+    <string name="my_words_hint">Hyderabad\nAdelaide\nAbdul Hakeem</string>
+    <string name="preference_title_deccani">Understand Deccani words</string>
+    <string name="preference_description_deccani">For Urdu and Hindi as spoken in Hyderabad. Words such as nakko, kaiku and mereku are understood as their standard forms before translating.</string>
     <string name="guest_done">Done</string>
     <string name="guest_end">End guest link</string>
     <string name="label_group_short">Group</string>
