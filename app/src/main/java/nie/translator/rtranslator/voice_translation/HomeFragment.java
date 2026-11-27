@@ -172,7 +172,7 @@ public class HomeFragment extends Fragment {
                 .setMessage(getString(enabled ? R.string.call_mode_ready : R.string.call_mode_setup))
                 .setNegativeButton(android.R.string.cancel, null);
         if (enabled) {
-            builder.setPositiveButton(R.string.home_start, (dialog, which) -> activity.setFragment(VoiceTranslationActivity.WALKIE_TALKIE_FRAGMENT, true));
+            builder.setPositiveButton(R.string.call_mode_start, (dialog, which) -> activity.setFragment(VoiceTranslationActivity.WALKIE_TALKIE_FRAGMENT, true));
         } else {
             builder.setPositiveButton(R.string.call_mode_open_settings, (dialog, which) -> {
                 try {
