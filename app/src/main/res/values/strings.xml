@@ -267,7 +267,15 @@
     <string name="guest_next">Next</string>
     <!-- Address of the guest relay (see the relay folder). Empty: guests can only join on the local network. -->
     <string name="guest_relay_url" translatable="false">https://lingoroom-relay.maakaz.workers.dev</string>
-    <string name="guest_steps_online">This is a room. Up to 25 people can join with this link or code, from anywhere, without the app.\n\nEach person picks their own language (%2$s or %1$s), then holds the microphone button to speak, or writes. Everyone reads and hears the others in the language they picked.</string>
+    <string name="guest_steps_online">This is your room. Its link stays the same, so you can plan meetings with it. Up to 25 people can join from anywhere, without the app.\n\nEach person picks their own language: %2$s, %1$s, or up to two other languages at a time. They hold the microphone button to speak, or write. Everyone reads and hears the others in the language they picked.</string>
+    <string name="guest_calendar">Add to calendar</string>
+    <string name="guest_calendar_title">Lingo Room meeting</string>
+    <string name="guest_calendar_missing">No calendar app was found on this phone. Use Send link instead.</string>
+    <string name="guest_change_link">Change my link</string>
+    <string name="guest_change_link_question">Give your room a new link? The current link stops working, including in invitations you already sent.</string>
+    <string name="guest_change_link_done">Done. Close this window and tap Invite people again to see the new link.</string>
+    <string name="history_share">Share</string>
+    <string name="history_share_one">Share in %1$s</string>
     <string name="guest_same_room">The others are here with me, or I hear them on a loudspeaker</string>
     <string name="guest_use_wifi">No internet</string>
     <string name="guest_use_internet">Use internet</string>

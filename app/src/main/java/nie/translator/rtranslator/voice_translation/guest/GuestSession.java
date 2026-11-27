@@ -47,8 +47,22 @@ public final class GuestSession {
             "Hold the microphone to speak",
             "Tap here to hear the conversation",
             "Your name",
-            "Choose your language"
+            "Choose your language",
+            "Other language",
+            "Waiting for the host to open the room"
     };
+
+    /** A room handles this many languages besides its two main ones. Each one costs the host phone a translation per message. */
+    public static final int MAX_EXTRA_LANGUAGES = 2;
+    private static final String PREFERENCE_ROOM = "guestRoomId";
+    private static final String PREFERENCE_ROOM_KEY = "guestRoomKey";
+    private static final java.util.ArrayList<String> extraLanguages = new java.util.ArrayList<>();
+    private static final java.util.ArrayList<String> chosenLanguages = new java.util.ArrayList<>();
+
+    /** @return true if a guest was using the language the last time the languages of the room were worked out */
+    public static synchronized boolean isChosen(String code) {
+        return chosenLanguages.contains(code);
+    }
 
     public interface Host {
         void onGuestText(String text, String language, String id, String name);
@@ -169,9 +183,17 @@ public final class GuestSession {
             if (isNew) {
                 sameRoom = false;   // guests who join by link are usually somewhere else
             }
-            relayRoom = randomHex(16);
+            // the room of this phone keeps the same link, so it can be put in a calendar invitation
+            android.content.SharedPreferences preferences = context.getSharedPreferences("default", Context.MODE_PRIVATE);
+            relayRoom = preferences.getString(PREFERENCE_ROOM, "");
+            String roomKey = preferences.getString(PREFERENCE_ROOM_KEY, "");
+            if (relayRoom.length() != 32 || roomKey.length() != 32) {
+                relayRoom = randomHex(16);
+                roomKey = randomHex(16);
+                preferences.edit().putString(PREFERENCE_ROOM, relayRoom).putString(PREFERENCE_ROOM_KEY, roomKey).apply();
+            }
             final GuestServer current = server;
-            relay = new RelayClient("wss://" + address.substring(8) + "/r/" + relayRoom + "/ws?role=host&key=" + randomHex(16), new RelayClient.Listener() {
+            relay = new RelayClient("wss://" + address.substring(8) + "/r/" + relayRoom + "/ws?role=host&key=" + roomKey, new RelayClient.Listener() {
                 @Override
                 public void onGuestJoined() {
                     RelayClient client = relay;
@@ -246,6 +268,12 @@ public final class GuestSession {
         GuestHotspot.stop();
     }
 
+    /** Closes the room and gives this phone a new link. The old link stops working. */
+    public static synchronized void changeLink(Context context) {
+        stop();
+        context.getSharedPreferences("default", Context.MODE_PRIVATE).edit().remove(PREFERENCE_ROOM).remove(PREFERENCE_ROOM_KEY).apply();
+    }
+
     public static synchronized boolean isActive() {
         return server != null;
     }
@@ -316,11 +344,50 @@ public final class GuestSession {
         }
     }
 
-    /** Sets the two languages the guests can choose from. */
-    public static synchronized void setLanguages(String firstCode, String firstName, String secondCode, String secondName) {
+    /**
+     * Sets the languages the guests can choose from.
+     * @param codesAndNames code and name of each language, the two main languages of the room first
+     */
+    public static synchronized void setLanguages(String[] codesAndNames) {
         if (server != null) {
+            extraLanguages.clear();
             server.clearLabels();
-            server.setLanguages(firstCode, firstName, secondCode, secondName);
+            server.setLanguages(codesAndNames);
+            server.setActiveLanguages(extraLanguages);
+        }
+    }
+
+    /**
+     * @return the languages chosen by guests right now besides the two main ones (at most MAX_EXTRA_LANGUAGES,
+     * the first chosen keep their place)
+     */
+    public static synchronized java.util.ArrayList<String> getExtraLanguages(String firstCode, String secondCode) {
+        java.util.ArrayList<String> chosen = new java.util.ArrayList<>();
+        if (server != null) {
+            chosen.addAll(server.getGuestLanguages());
+        }
+        RelayClient currentRelay = relay;
+        if (currentRelay != null) {
+            chosen.addAll(currentRelay.getGuestLanguages());
+        }
+        chosenLanguages.clear();
+        chosenLanguages.addAll(chosen);
+        extraLanguages.retainAll(chosen);
+        for (String language : chosen) {
+            if (!language.equals(firstCode) && !language.equals(secondCode) && !extraLanguages.contains(language) && extraLanguages.size() < MAX_EXTRA_LANGUAGES) {
+                extraLanguages.add(language);
+            }
+        }
+        if (server != null) {
+            server.setActiveLanguages(extraLanguages);
+        }
+        return new java.util.ArrayList<>(extraLanguages);
+    }
+
+    /** Adds or updates a message in one more language of the room. */
+    public static synchronized void publishExtra(String key, String language, String text) {
+        if (server != null) {
+            server.publishExtra(key, language, text);
         }
     }
 

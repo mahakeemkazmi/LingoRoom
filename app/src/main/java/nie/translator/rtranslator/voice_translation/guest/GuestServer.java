@@ -61,6 +61,7 @@ public final class GuestServer {
         String originalLanguage;
         String translated;
         String translatedLanguage;
+        LinkedHashMap<String, String> extra;   // the message in the other languages of the room
         boolean isFinal;
         long revision;
     }
@@ -78,7 +79,10 @@ public final class GuestServer {
     private final LinkedHashMap<String, Sound> sounds = new LinkedHashMap<>();   // the last spoken phrases
     private final String[] englishLabels;
     private final LinkedHashMap<String, String[]> labels = new LinkedHashMap<>();   // the texts of the page, by language
-    private final String[] languages = {"", "", "", ""};   // code and name of the two languages of the room
+    private String[] languages = {"", "", "", ""};   // code and name of each language a guest can choose, the two main ones first
+    private final LinkedHashMap<String, long[]> presence = new LinkedHashMap<>();   // local guests: {time of the last sign of life}
+    private final LinkedHashMap<String, String> presenceLanguage = new LinkedHashMap<>();
+    private volatile String activeJson = "[]";
     private final ExecutorService workers = Executors.newFixedThreadPool(8);
     private ServerSocket serverSocket;
     private volatile boolean running;
@@ -199,12 +203,65 @@ public final class GuestServer {
         return revision;
     }
 
-    /** Sets the two languages the guests can choose from. */
-    public synchronized void setLanguages(String firstCode, String firstName, String secondCode, String secondName) {
-        languages[0] = firstCode == null ? "" : firstCode;
-        languages[1] = firstName == null ? "" : firstName;
-        languages[2] = secondCode == null ? "" : secondCode;
-        languages[3] = secondName == null ? "" : secondName;
+    /**
+     * Sets the languages the guests can choose from.
+     * @param codesAndNames code and name of each language, the two main languages of the room first
+     */
+    public synchronized void setLanguages(String[] codesAndNames) {
+        languages = codesAndNames.clone();
+        notifyChanged();
+    }
+
+    /** @param codes the extra languages in use right now (the page stops offering others when the room has enough) */
+    public synchronized void setActiveLanguages(java.util.Collection<String> codes) {
+        StringBuilder json = new StringBuilder("[");
+        for (String code : codes) {
+            if (json.length() > 1) json.append(',');
+            json.append(quote(code));
+        }
+        String value = json.append(']').toString();
+        if (!value.equals(activeJson)) {
+            activeJson = value;
+            notifyChanged();
+        }
+    }
+
+    /** @return the languages chosen by the guests on the local network who gave a sign of life in the last seconds */
+    public synchronized java.util.ArrayList<String> getGuestLanguages() {
+        java.util.ArrayList<String> result = new java.util.ArrayList<>();
+        long now = System.currentTimeMillis();
+        for (Map.Entry<String, long[]> guest : presence.entrySet()) {
+            String language = presenceLanguage.get(guest.getKey());
+            if (now - guest.getValue()[0] < 15000 && language != null && !language.isEmpty() && !result.contains(language)) {
+                result.add(language);
+            }
+        }
+        return result;
+    }
+
+    private synchronized void seen(String id, String language) {
+        if (id.isEmpty()) {
+            return;
+        }
+        if (presence.size() > 200) {
+            presence.clear();
+            presenceLanguage.clear();
+        }
+        presence.put(id, new long[]{System.currentTimeMillis()});
+        presenceLanguage.put(id, language);
+    }
+
+    /** Adds or updates a message in one more language of the room. */
+    public synchronized void publishExtra(String key, String language, String text) {
+        Entry entry = messages.get(key);
+        if (entry == null || language == null || text == null) {
+            return;
+        }
+        if (entry.extra == null) {
+            entry.extra = new LinkedHashMap<>();
+        }
+        entry.extra.put(language, text);
+        entry.revision = ++revision;
         notifyChanged();
     }
 
@@ -262,7 +319,10 @@ public final class GuestServer {
         if (language.equals(entry.originalLanguage)) {
             return entry.original;
         }
-        return language.equals(entry.translatedLanguage) ? entry.translated : null;
+        if (language.equals(entry.translatedLanguage)) {
+            return entry.translated;
+        }
+        return entry.extra == null ? null : entry.extra.get(language);
     }
 
     /**
@@ -296,8 +356,12 @@ public final class GuestServer {
     public synchronized String eventsJson(long since) {
         StringBuilder json = new StringBuilder();
         json.append("{\"rev\":").append(revision);
-        json.append(",\"langs\":[{\"c\":").append(quote(languages[0])).append(",\"n\":").append(quote(languages[1]));
-        json.append("},{\"c\":").append(quote(languages[2])).append(",\"n\":").append(quote(languages[3])).append("}]");
+        json.append(",\"langs\":[");
+        for (int i = 0; i + 1 < languages.length; i += 2) {
+            if (i > 0) json.append(',');
+            json.append("{\"c\":").append(quote(languages[i])).append(",\"n\":").append(quote(languages[i + 1])).append('}');
+        }
+        json.append("],\"active\":").append(activeJson);
         json.append(",\"labels\":{\"en\":").append(array(englishLabels));
         for (Map.Entry<String, String[]> item : labels.entrySet()) {
             if (!item.getKey().equals("en")) {
@@ -317,6 +381,16 @@ public final class GuestServer {
             json.append(",\"ol\":").append(quote(entry.originalLanguage));
             json.append(",\"translated\":").append(quote(entry.translated));
             json.append(",\"tl\":").append(quote(entry.translatedLanguage));
+            if (entry.extra != null) {
+                json.append(",\"x\":{");
+                boolean firstExtra = true;
+                for (Map.Entry<String, String> more : entry.extra.entrySet()) {
+                    if (!firstExtra) json.append(',');
+                    firstExtra = false;
+                    json.append(quote(more.getKey())).append(':').append(quote(more.getValue()));
+                }
+                json.append('}');
+            }
             json.append(",\"final\":").append(entry.isFinal).append('}');
         }
         json.append("],\"sounds\":[");
@@ -440,6 +514,7 @@ public final class GuestServer {
                 respond(output, "200 OK", "text/html; charset=utf-8", page);
             } else if (method.equals("GET") && target.equals(base + "/events")) {
                 lastGuestContact = System.currentTimeMillis();
+                seen(clean(parameter(query, "id"), 40), clean(parameter(query, "lang"), 16));
                 if (parameter(query, "aloud").equals("1")) {
                     lastGuestListening = System.currentTimeMillis();
                 }

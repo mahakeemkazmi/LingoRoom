@@ -17,6 +17,7 @@
 package nie.translator.rtranslator.voice_translation.history;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.os.Handler;
@@ -124,22 +125,55 @@ public class HistoryFragment extends Fragment {
         return DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(new Date(conversation.startedAt));
     }
 
-    private void showConversation(ConversationHistoryStore.Conversation conversation) {
+    /**
+     * @param firstLanguageOnly true for a transcript in one language: what was said in the first language as it was said,
+     * and everything else in its translation
+     */
+    private static String transcript(ConversationHistoryStore.Conversation conversation, boolean firstLanguageOnly) {
         StringBuilder text = new StringBuilder();
         for (ConversationHistoryStore.Line line : conversation.lines) {
-            if (!conversation.secondLanguage.isEmpty()) {
-                text.append(line.firstSpeaker ? conversation.firstLanguage : conversation.secondLanguage).append("\n");
+            String label = line.name.isEmpty() ? "" : line.name;
+            if (!firstLanguageOnly && !conversation.secondLanguage.isEmpty()) {
+                String language = line.firstSpeaker ? conversation.firstLanguage : conversation.secondLanguage;
+                label = label.isEmpty() ? language : label + " (" + language + ")";
             }
-            if (!line.original.isEmpty()) {
-                text.append(line.original).append("\n");
+            if (firstLanguageOnly) {
+                String own = line.firstSpeaker && !line.original.isEmpty() ? line.original : line.translated;
+                text.append(label.isEmpty() ? "" : label + ": ").append(own).append("\n");
+            } else {
+                if (!label.isEmpty()) {
+                    text.append(label).append("\n");
+                }
+                if (!line.original.isEmpty()) {
+                    text.append(line.original).append("\n");
+                }
+                text.append(line.translated).append("\n\n");
             }
-            text.append(line.translated).append("\n\n");
         }
-        new AlertDialog.Builder(activity)
+        return text.toString().trim();
+    }
+
+    private void share(ConversationHistoryStore.Conversation conversation, boolean firstLanguageOnly) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType("text/plain");
+            intent.putExtra(Intent.EXTRA_SUBJECT, title(conversation) + ", " + date(conversation));
+            intent.putExtra(Intent.EXTRA_TEXT, title(conversation) + "\n" + date(conversation) + "\n\n" + transcript(conversation, firstLanguageOnly));
+            startActivity(Intent.createChooser(intent, getString(R.string.history_share)));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void showConversation(final ConversationHistoryStore.Conversation conversation) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(activity)
                 .setTitle(title(conversation))
-                .setMessage(text.toString().trim())
+                .setMessage(transcript(conversation, false))
                 .setPositiveButton(android.R.string.ok, null)
-                .show();
+                .setNegativeButton(R.string.history_share, (dialog, which) -> share(conversation, false));
+        if (!conversation.secondLanguage.isEmpty()) {
+            builder.setNeutralButton(getString(R.string.history_share_one, conversation.firstLanguage), (dialog, which) -> share(conversation, true));
+        }
+        builder.show();
     }
 
     private void confirmDelete(final ConversationHistoryStore.Conversation conversation) {

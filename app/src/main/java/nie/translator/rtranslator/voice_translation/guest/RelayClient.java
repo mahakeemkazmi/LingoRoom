@@ -58,6 +58,7 @@ final class RelayClient {
     private final Listener listener;
     private final HashMap<String, ByteArrayOutputStream> audio = new HashMap<>();   // the voice of each guest who is talking
     private final HashMap<String, Long> listening = new HashMap<>();   // the guests who play the conversation aloud
+    private final HashMap<String, Object[]> present = new HashMap<>();   // each guest: {time of the last sign of life, language}
     private WebSocket socket;
     private volatile boolean open;
     private volatile boolean closed;
@@ -75,6 +76,8 @@ final class RelayClient {
             @Override
             public void onOpen(WebSocket webSocket, Response response) {
                 open = true;
+                // guests who arrived before us are waiting for the room
+                listener.onGuestJoined();
             }
 
             @Override
@@ -85,6 +88,13 @@ final class RelayClient {
                     String id = GuestServer.clean(json.optString("id"), 40);
                     String language = GuestServer.clean(json.optString("lang"), 16);
                     String name = GuestServer.clean(json.optString("name"), 30);
+                    if (!id.isEmpty() && !language.isEmpty()) {
+                        synchronized (listening) {
+                            if (present.size() < 200) {
+                                present.put(id, new Object[]{System.currentTimeMillis(), language});
+                            }
+                        }
+                    }
                     if (type.equals("hello")) {
                         listener.onGuestJoined();
                     } else if (type.equals("aloud")) {
@@ -173,6 +183,20 @@ final class RelayClient {
             }
         }
         return false;
+    }
+
+    /** @return the languages chosen by the guests who gave a sign of life in the last seconds */
+    java.util.ArrayList<String> getGuestLanguages() {
+        java.util.ArrayList<String> result = new java.util.ArrayList<>();
+        long now = System.currentTimeMillis();
+        synchronized (listening) {
+            for (Object[] guest : present.values()) {
+                if (now - (Long) guest[0] < 15000 && !result.contains((String) guest[1])) {
+                    result.add((String) guest[1]);
+                }
+            }
+        }
+        return result;
     }
 
     synchronized void send(String text) {

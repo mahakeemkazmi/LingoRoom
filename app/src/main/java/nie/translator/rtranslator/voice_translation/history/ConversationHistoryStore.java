@@ -41,6 +41,7 @@ public final class ConversationHistoryStore {
 
     public static class Line {
         public boolean firstSpeaker;
+        public String name = "";   // who spoke, when a guest of a room gave a name
         public String original = "";
         public String translated = "";
     }
@@ -91,6 +92,7 @@ public final class ConversationHistoryStore {
             for (Line line : conversation.lines) {
                 JSONObject item = new JSONObject();
                 item.put("first", line.firstSpeaker);
+                item.put("name", line.name);
                 item.put("original", line.original);
                 item.put("translated", line.translated);
                 lines.put(item);
@@ -131,6 +133,7 @@ public final class ConversationHistoryStore {
                     if (item == null) continue;
                     Line line = new Line();
                     line.firstSpeaker = item.optBoolean("first");
+                    line.name = item.optString("name");
                     line.original = item.optString("original");
                     line.translated = item.optString("translated");
                     conversation.lines.add(line);

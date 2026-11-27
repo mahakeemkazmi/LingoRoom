@@ -5,7 +5,7 @@ import page from "./guest_page.html";
 
 const MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
 const MAX_GUESTS = 25;
-const ROOM_LIFETIME_MS = 2 * 60 * 60 * 1000;
+const ROOM_LIFETIME_MS = 6 * 60 * 60 * 1000;
 
 export default {
   async fetch(request, env) {
@@ -49,8 +49,8 @@ export class Room {
       }
       if (!hostKey) {
         await this.ctx.storage.put("hostKey", key);
-        await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
       }
+      await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
       for (const old of this.ctx.getWebSockets("host")) {
         try { old.close(1000, "replaced"); } catch (error) {}
       }
@@ -86,6 +86,6 @@ export class Room {
     for (const socket of this.ctx.getWebSockets()) {
       try { socket.close(1000, "room ended"); } catch (error) {}
     }
-    await this.ctx.storage.deleteAll();
+    // the room keeps its owner: a phone has one lasting link, and nobody else may take it over
   }
 }

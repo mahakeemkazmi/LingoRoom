@@ -40,6 +40,7 @@
   #name { font: inherit; font-size: 18px; padding: 10px 12px; border: 1px solid #C9BEE8; border-radius: 14px; }
   #join button { background: #FFB025; color: #171B38; font-size: 20px; font-weight: 700; padding: 16px; }
   #join button:disabled { opacity: .5; }
+  #languageOther { font: inherit; font-size: 17px; padding: 12px; border: 1px solid #C9BEE8; border-radius: 14px; background: #fff; color: #171B38; }
 </style>
 </head>
 <body>
@@ -55,9 +56,10 @@
 <div id="start"><div id="join">
   <h1>Lingo Room</h1>
   <input id="name" type="text" maxlength="30" placeholder="Your name" autocomplete="name">
-  <p id="chooseText">Choose your language</p>
+  <p id="chooseText">Waiting for the host to open the room</p>
   <button type="button" id="languageA" disabled>...</button>
   <button type="button" id="languageB" disabled>...</button>
+  <select id="languageOther" disabled><option value="">Other language</option></select>
 </div></div>
 <script>
 (function () {
@@ -68,6 +70,7 @@
   var hint = element("hint"), mic = element("mic"), start = element("start"), nameInput = element("name"), languageButton = element("language");
   var since = 0, readAloud = false, played = {}, rows = {}, all = {}, order = [], pending = [], socket = null;
   var languages = [], labels = {}, myLanguage = "", myName = "", announced = null, firstData = true;
+  var otherSelect = element("languageOther"), otherSignature = "";
   var myId = "";
   try { myId = sessionStorage.getItem("lingoRoomId") || ""; } catch (error) {}
   if (!myId) {
@@ -129,8 +132,9 @@
       row.label = document.createElement("span");
       row.appendChild(row.label);
     }
-    var shown = message.ol === myLanguage ? message.original : message.translated;
-    row.label.textContent = shown || message.original;
+    var shown = message.ol === myLanguage ? message.original : (message.tl === myLanguage ? message.translated : (message.x && message.x[myLanguage]) || "");
+    row.label.textContent = shown || "...";
+    if (!shown) row.className += " wait";
     if (!mine && message.final && !row.again) {
       // a small speaker to hear this message again
       row.again = document.createElement("button");
@@ -160,7 +164,12 @@
         if (names.indexOf(set[6]) < 0) names.push(set[6]);
       }
     }
-    if (question.length) element("chooseText").textContent = question.join(" / ");
+    if (question.length && languages.length) element("chooseText").textContent = question.join(" / ");
+    var english = labels.en;
+    if (english && english.length >= 10) {
+      otherSelect.options[0].textContent = (labels[myLanguage] || english)[8];
+      if (!languages.length) element("chooseText").textContent = english[9];
+    }
     if (names.length) nameInput.placeholder = names.join(" / ");
   }
 
@@ -175,8 +184,25 @@
         buttons[b].disabled = !(language && language.c);
         if (language && language.c === myLanguage) languageButton.textContent = language.n;
       }
-      // the host changed a language of the room and ours no longer exists: we ask again
-      if (myLanguage && languages.length === 2 && languages[0].c !== myLanguage && languages[1].c !== myLanguage) {
+      // the other languages, in a list. A room takes a limited number of them at a time
+      var active = data.active || [], full = active.length >= 2, signature = JSON.stringify([languages, active]);
+      if (signature !== otherSignature) {
+        otherSignature = signature;
+        while (otherSelect.options.length > 1) otherSelect.remove(1);
+        for (var o = 2; o < languages.length; o++) {
+          var option = document.createElement("option");
+          option.value = languages[o].c;
+          option.textContent = languages[o].n;
+          option.disabled = full && active.indexOf(languages[o].c) < 0;
+          otherSelect.appendChild(option);
+        }
+        otherSelect.disabled = languages.length <= 2;
+        otherSelect.value = "";
+      }
+      // the host changed the languages of the room and ours no longer exists: we ask again
+      var known = false;
+      for (var k = 0; k < languages.length; k++) if (languages[k].c === myLanguage) { known = true; languageButton.textContent = languages[k].n; }
+      if (myLanguage && languages.length && !known) {
         myLanguage = "";
         start.style.display = "flex";
       }
@@ -199,7 +225,7 @@
 
   function poll() {
     var request = new XMLHttpRequest();
-    request.open("GET", base + "/events?since=" + since + "&aloud=" + (readAloud ? 1 : 0));
+    request.open("GET", base + "/events?since=" + since + "&aloud=" + (readAloud ? 1 : 0) + "&id=" + myId + "&lang=" + encodeURIComponent(myLanguage));
     request.timeout = 5000;
     request.onload = function () {
       try { handle(JSON.parse(request.responseText)); } catch (error) {}
@@ -245,7 +271,7 @@
   }
 
   function reportAloud() {
-    if (online) tell({ type: "aloud", on: readAloud && !!myLanguage, id: myId });
+    if (online) tell({ type: "aloud", on: readAloud && !!myLanguage, id: myId, lang: myLanguage });
   }
 
   function setAloud(on) {
@@ -366,6 +392,7 @@
   function choose(index) {
     var language = languages[index];
     if (!language || !language.c) return;
+    since = 0;   // on the local network we ask for everything again, to get it in the new language
     myLanguage = language.c;
     myName = nameInput.value.replace(/\s+/g, " ").trim().slice(0, 30);
     languageButton.textContent = language.n;
@@ -382,6 +409,9 @@
 
   element("languageA").addEventListener("click", function () { choose(0); });
   element("languageB").addEventListener("click", function () { choose(1); });
+  otherSelect.addEventListener("change", function () {
+    for (var i = 2; i < languages.length; i++) if (languages[i].c === otherSelect.value) { choose(i); return; }
+  });
   languageButton.addEventListener("click", function () { start.style.display = "flex"; });
   send.addEventListener("click", sendText);
   text.addEventListener("keydown", function (event) {
