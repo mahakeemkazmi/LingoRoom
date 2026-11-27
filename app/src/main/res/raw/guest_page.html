@@ -37,6 +37,7 @@
   #join { background: #fff; border-radius: 20px; padding: 22px; width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 12px; }
   #join h1 { margin: 0; font-size: 22px; color: #520380; }
   #join p { margin: 0; font-size: 16px; color: #5b5f7a; }
+  #pin { font: inherit; font-size: 26px; letter-spacing: 6px; text-align: center; padding: 10px 12px; border: 2px solid #520380; border-radius: 14px; }
   #name { font: inherit; font-size: 18px; padding: 10px 12px; border: 1px solid #C9BEE8; border-radius: 14px; }
   #join button { background: #FFB025; color: #171B38; font-size: 20px; font-weight: 700; padding: 16px; }
   #join button:disabled { opacity: .5; }
@@ -55,6 +56,7 @@
 </div>
 <div id="start"><div id="join">
   <h1>Lingo Room</h1>
+  <input id="pin" type="text" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off" style="display:none">
   <input id="name" type="text" maxlength="30" placeholder="Your name" autocomplete="name">
   <p id="chooseText">Waiting for the host to open the room</p>
   <button type="button" id="languageA" disabled>...</button>
@@ -244,7 +246,7 @@
   }
 
   function connect() {
-    socket = new WebSocket("wss://" + location.host + base + "/ws?role=guest");
+    socket = new WebSocket("wss://" + location.host + base + "/ws?role=guest&pin=" + encodeURIComponent(myPin));
     socket.binaryType = "arraybuffer";
     socket.onopen = function () { tell({ type: "hello", id: myId }); reportAloud(); };
     socket.onmessage = function (event) {
@@ -266,9 +268,42 @@
     };
     socket.onclose = function () {
       dot.className = "dot";
-      setTimeout(connect, 1500);
+      setTimeout(checkPin, 1500);   // we check the PIN again first: the host may have changed it
     };
   }
+
+  // a room on the internet asks for the PIN of the invitation before it lets anyone in
+  var myPin = (location.hash || "").replace(/[^0-9]/g, "").slice(0, 8), pinInput = element("pin"), checking = false, entered = false;
+  function checkPin() {
+    if (checking) return;
+    checking = true;
+    var request = new XMLHttpRequest();
+    request.open("GET", base + "/check?pin=" + encodeURIComponent(myPin));
+    request.timeout = 6000;
+    request.onload = function () {
+      checking = false;
+      if (request.status === 200) {
+        pinInput.style.display = "none";
+        if (!entered && !languages.length) element("chooseText").textContent = "Waiting for the host to open the room";
+        entered = true;
+        connect();
+      } else {
+        entered = false;
+        start.style.display = "flex";
+        pinInput.style.display = "block";
+        element("chooseText").textContent = request.status === 429 ? "Too many wrong tries. Please wait 10 minutes"
+          : request.status === 404 ? "This room does not exist" : (myPin.length >= 4 ? "Wrong PIN" : "Enter the PIN from your invitation");
+        if (request.status === 403 && myPin.length >= 4) { myPin = ""; pinInput.value = ""; }
+      }
+    };
+    request.onerror = request.ontimeout = function () { checking = false; setTimeout(checkPin, 2000); };
+    request.send();
+  }
+  pinInput.addEventListener("input", function () {
+    var digits = pinInput.value.replace(/[^0-9]/g, "");
+    if (digits !== pinInput.value) pinInput.value = digits;
+    if (digits.length >= 4) { myPin = digits; checkPin(); }
+  });
 
   function reportAloud() {
     if (online) tell({ type: "aloud", on: readAloud && !!myLanguage, id: myId, lang: myLanguage });
@@ -427,7 +462,8 @@
     mic.addEventListener("pointercancel", stopTalking);
     mic.addEventListener("pointerleave", stopTalking);
     mic.addEventListener("contextmenu", function (event) { event.preventDefault(); });
-    connect();
+    try { history.replaceState(null, "", location.pathname); } catch (error) {}   // the PIN does not stay in the address bar
+    checkPin();
   } else {
     poll();
   }

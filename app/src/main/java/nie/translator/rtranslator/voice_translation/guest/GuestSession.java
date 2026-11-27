@@ -56,6 +56,7 @@ public final class GuestSession {
     public static final int MAX_EXTRA_LANGUAGES = 2;
     private static final String PREFERENCE_ROOM = "guestRoomId";
     private static final String PREFERENCE_ROOM_KEY = "guestRoomKey";
+    private static final String PREFERENCE_PIN = "guestRoomPin";
     private static final java.util.ArrayList<String> extraLanguages = new java.util.ArrayList<>();
     private static final java.util.ArrayList<String> chosenLanguages = new java.util.ArrayList<>();
 
@@ -96,12 +97,145 @@ public final class GuestSession {
         return !relayAddress(context).isEmpty();
     }
 
-    private static String relayAddress(Context context) {
-        String address = context.getString(R.string.guest_relay_url).trim();
+    private static volatile String verifiedAddress = "";
+
+    private static String clean(String address) {
+        address = address.trim();
         while (address.endsWith("/")) {
             address = address.substring(0, address.length() - 1);
         }
         return address.startsWith("https://") ? address : "";
+    }
+
+    /**
+     * @return the address of the relay: our own domain once we have seen that it answers as the relay, and until
+     * then the address the relay always has
+     */
+    private static String relayAddress(Context context) {
+        String verified = verifiedAddress;
+        return verified.isEmpty() ? clean(context.getString(R.string.guest_relay_url)) : verified;
+    }
+
+    /**
+     * Checks in the background whether the relay answers on our own domain, to use that nicer address for the links.
+     */
+    public static void findBestAddress(Context context) {
+        final String preferred = clean(context.getString(R.string.guest_relay_preferred_url));
+        if (preferred.isEmpty() || !verifiedAddress.isEmpty()) {
+            return;
+        }
+        new Thread("relayAddress") {
+            @Override
+            public void run() {
+                if ("Lingo Room guest relay".equals(get(preferred + "/"))) {
+                    verifiedAddress = preferred;
+                }
+            }
+        }.start();
+    }
+
+    /** @return the text answered by an address of the relay, or null. Must not be called from the main thread. */
+    @Nullable
+    private static String get(String address) {
+        java.net.HttpURLConnection connection = null;
+        try {
+            connection = (java.net.HttpURLConnection) new java.net.URL(address).openConnection();
+            connection.setConnectTimeout(6000);
+            connection.setReadTimeout(6000);
+            connection.setInstanceFollowRedirects(false);
+            if (connection.getResponseCode() != 200) {
+                return null;
+            }
+            try (InputStream input = connection.getInputStream()) {
+                byte[] buffer = new byte[512];
+                int length = 0;
+                int read;
+                while (length < buffer.length && (read = input.read(buffer, length, buffer.length - length)) > 0) {
+                    length += read;
+                }
+                return new String(buffer, 0, length, StandardCharsets.UTF_8).trim();
+            }
+        } catch (Throwable error) {
+            return null;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    private static final String NAME_LETTERS = "abcdefghjkmnpqrstuvwxyz23456789";   // none that look alike
+
+    private static String randomName() {
+        SecureRandom random = new SecureRandom();
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < 8; i++) {
+            builder.append(NAME_LETTERS.charAt(random.nextInt(NAME_LETTERS.length())));
+        }
+        return builder.toString();
+    }
+
+    private static String randomPin() {
+        return String.valueOf(1000 + new SecureRandom().nextInt(9000));
+    }
+
+    /** @return true if the text can be the name of a room: 3 to 24 small letters, digits or hyphens */
+    public static boolean isValidRoomName(String name) {
+        return name != null && name.matches("[a-z0-9][a-z0-9-]{2,23}") && !name.equals("www");
+    }
+
+    /** @return the name of the room of this phone (the end of its link), a new random one the first time */
+    public static synchronized String getRoomName(Context context) {
+        android.content.SharedPreferences preferences = context.getSharedPreferences("default", Context.MODE_PRIVATE);
+        String name = preferences.getString(PREFERENCE_ROOM, "");
+        String key = preferences.getString(PREFERENCE_ROOM_KEY, "");
+        if (!isValidRoomName(name) || name.length() == 32 || key.length() != 32) {
+            // first time, or the long code of an older version: the room gets a short name
+            name = randomName();
+            preferences.edit().putString(PREFERENCE_ROOM, name).putString(PREFERENCE_ROOM_KEY, randomHex(16)).putString(PREFERENCE_PIN, randomPin()).apply();
+        }
+        return name;
+    }
+
+    /** @return the PIN guests need to enter the room of this phone */
+    public static synchronized String getPin(Context context) {
+        getRoomName(context);
+        android.content.SharedPreferences preferences = context.getSharedPreferences("default", Context.MODE_PRIVATE);
+        String pin = preferences.getString(PREFERENCE_PIN, "");
+        if (!pin.matches("[0-9]{4,8}")) {
+            pin = randomPin();
+            preferences.edit().putString(PREFERENCE_PIN, pin).apply();
+        }
+        return pin;
+    }
+
+    /**
+     * Gives the room of this phone a name chosen by its user. Must not be called from the main thread.
+     * @return 0 if the room now has that name, 1 if somebody else already has it, 2 if it could not be checked
+     */
+    public static int renameRoom(Context context, String name) {
+        String address = relayAddress(context);
+        if (address.isEmpty() || !isValidRoomName(name)) {
+            return 2;
+        }
+        android.content.SharedPreferences preferences = context.getSharedPreferences("default", Context.MODE_PRIVATE);
+        getRoomName(context);
+        String key = preferences.getString(PREFERENCE_ROOM_KEY, "");
+        String answer = get(address + "/" + name + "/owner?key=" + key);
+        if (answer == null) {
+            return 2;
+        }
+        if (answer.contains("\"taken\"")) {
+            return 1;
+        }
+        synchronized (GuestSession.class) {
+            if (relay != null) {
+                relay.close();
+                relay = null;
+            }
+            preferences.edit().putString(PREFERENCE_ROOM, name).apply();
+        }
+        return 0;
     }
 
     private static String randomHex(int bytes) {
@@ -184,16 +318,11 @@ public final class GuestSession {
                 sameRoom = false;   // guests who join by link are usually somewhere else
             }
             // the room of this phone keeps the same link, so it can be put in a calendar invitation
-            android.content.SharedPreferences preferences = context.getSharedPreferences("default", Context.MODE_PRIVATE);
-            relayRoom = preferences.getString(PREFERENCE_ROOM, "");
-            String roomKey = preferences.getString(PREFERENCE_ROOM_KEY, "");
-            if (relayRoom.length() != 32 || roomKey.length() != 32) {
-                relayRoom = randomHex(16);
-                roomKey = randomHex(16);
-                preferences.edit().putString(PREFERENCE_ROOM, relayRoom).putString(PREFERENCE_ROOM_KEY, roomKey).apply();
-            }
+            relayRoom = getRoomName(context);
+            String roomKey = context.getSharedPreferences("default", Context.MODE_PRIVATE).getString(PREFERENCE_ROOM_KEY, "");
+            String roomPin = getPin(context);
             final GuestServer current = server;
-            relay = new RelayClient("wss://" + address.substring(8) + "/r/" + relayRoom + "/ws?role=host&key=" + roomKey, new RelayClient.Listener() {
+            relay = new RelayClient("wss://" + address.substring(8) + "/" + relayRoom + "/ws?role=host&key=" + roomKey + "&pin=" + roomPin, new RelayClient.Listener() {
                 @Override
                 public void onGuestJoined() {
                     RelayClient client = relay;
@@ -226,7 +355,7 @@ public final class GuestSession {
             });
             relay.connect();
         }
-        return address + "/r/" + relayRoom;
+        return address + "/" + relayRoom;
     }
 
     /**
@@ -271,7 +400,7 @@ public final class GuestSession {
     /** Closes the room and gives this phone a new link. The old link stops working. */
     public static synchronized void changeLink(Context context) {
         stop();
-        context.getSharedPreferences("default", Context.MODE_PRIVATE).edit().remove(PREFERENCE_ROOM).remove(PREFERENCE_ROOM_KEY).apply();
+        context.getSharedPreferences("default", Context.MODE_PRIVATE).edit().remove(PREFERENCE_ROOM).remove(PREFERENCE_ROOM_KEY).remove(PREFERENCE_PIN).apply();
     }
 
     public static synchronized boolean isActive() {
