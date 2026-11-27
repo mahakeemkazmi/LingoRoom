@@ -59,6 +59,9 @@ public final class GuestSession {
     private static volatile RelayClient relay;
     private static volatile long relaySentRevision;
     private static String relayRoom;
+    private static GuestVoice voice;
+    private static int soundCounter;
+    private static volatile String speechLanguage = "";
     private static Host host;
 
     private GuestSession() {
@@ -107,6 +110,15 @@ public final class GuestSession {
             }
         });
         server = created;
+        voice = new GuestVoice(context, (key, wav) -> {
+            created.addSound(key, wav);
+            RelayClient current = relay;
+            if (current != null && current.isOpen()) {
+                // over the internet the sound travels with the conversation: first its name, then the sound itself
+                current.send("{\"type\":\"audio\",\"key\":" + GuestServer.quote(key) + "}");
+                current.send(wav);
+            }
+        });
         if (host != null) {
             host.onGuestSessionStarted();
         }
@@ -195,6 +207,11 @@ public final class GuestSession {
             server.stop();
             server = null;
         }
+        if (voice != null) {
+            voice.shutdown();
+            voice = null;
+        }
+        GuestHotspot.stop();
     }
 
     public static synchronized boolean isActive() {
@@ -221,7 +238,17 @@ public final class GuestSession {
         }
     }
 
+    /**
+     * Makes the phone of the guest say a phrase. Phrases are heard in the order of the calls.
+     */
+    public static synchronized void speak(String phrase) {
+        if (voice != null && !speechLanguage.isEmpty()) {
+            voice.synthesize("s" + (soundCounter++), phrase, speechLanguage);
+        }
+    }
+
     public static synchronized void setSpeechLanguage(String languageCode) {
+        speechLanguage = languageCode == null ? "" : languageCode;
         if (server != null) {
             server.setSpeechLanguage(languageCode);
         }
@@ -249,7 +276,7 @@ public final class GuestSession {
      * @return the address of this phone on its Wi-Fi or on its own hotspot (the hotspot wins), or null
      */
     @Nullable
-    static String localAddress() {
+    public static String localAddress() {
         String wifi = null;
         String other = null;
         try {

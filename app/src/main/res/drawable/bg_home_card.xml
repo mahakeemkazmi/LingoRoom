@@ -2,6 +2,6 @@
 <!-- Rounded card used for the language selectors and chips of the home screen -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <solid android:color="?attr/colorBackgroundLite"/>
-    <stroke android:width="1dp" android:color="#33520380"/>
+    <stroke android:width="1dp" android:color="@color/home_card_stroke"/>
     <corners android:radius="18dp"/>
 </shape>

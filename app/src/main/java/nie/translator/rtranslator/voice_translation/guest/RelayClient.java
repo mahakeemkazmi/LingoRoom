@@ -159,6 +159,12 @@ final class RelayClient {
         }
     }
 
+    synchronized void send(byte[] bytes) {
+        if (socket != null && open) {
+            socket.send(ByteString.of(bytes));
+        }
+    }
+
     synchronized void close() {
         closed = true;
         handler.removeCallbacksAndMessages(null);

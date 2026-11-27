@@ -35,6 +35,9 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatImageButton;
+import android.widget.TextView;
+import nie.translator.rtranslator.tools.LanguageFlags;
+import nie.translator.rtranslator.tools.gui.WaveformView;
 import nie.translator.rtranslator.voice_translation.guest.GuestInviteDialog;
 import nie.translator.rtranslator.voice_translation.guest.GuestSession;
 import androidx.appcompat.widget.Toolbar;
@@ -86,6 +89,8 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
     private MaterialButton firstLanguageSelector;
     private MaterialButton secondLanguageSelector;
     private AppCompatImageButton settingsButton;
+    private TextView conversationStatus;
+    private WaveformView conversationWaveform;
     private ButtonSound sound;
     private long lastPressedLeftMic = -1;
     private long lastPressedRightMic = -1;
@@ -129,6 +134,8 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
         leftMicLanguage = view.findViewById(R.id.textButton1);
         rightMicLanguage = view.findViewById(R.id.textButton2);
         settingsButton = view.findViewById(R.id.settingsButton);
+        conversationStatus = view.findViewById(R.id.conversationStatus);
+        conversationWaveform = view.findViewById(R.id.conversationWaveform);
         description.setText(R.string.description_walkie_talkie);
         deactivateInputs(DeactivableButton.DEACTIVATED);
         //container.setVisibility(View.INVISIBLE);  //we make the UI invisible until the restore of the attributes from the service (to avoid instant changes of the UI).
@@ -414,6 +421,7 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
             public void onSuccess(ArrayList<GuiMessage> messages, boolean isMicMute, boolean isAudioMute, boolean isTTSError, final boolean isEditTextOpen, boolean isBluetoothHeadsetConnected, boolean isMicAutomatic, boolean isMicActivated, long speakingUtteranceId, int listeningMic) {
                 // initialization with service values
                 //container.setVisibility(View.VISIBLE);
+                setConversationState(isMicActivated ? 1 : 3);
                 mAdapter = new MessagesAdapter(messages, global, speakingUtteranceId, new MessagesAdapter.Callback() {
                     @Override
                     public void onFirstItemAdded() {
@@ -621,13 +629,45 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
         activity.disconnectFromWalkieTalkieService(walkieTalkieServiceCommunicator);
     }
 
+    // status line of the conversation: 0 preparing, 1 listening, 2 hearing a voice, 3 translating or speaking
+    private int conversationState = 0;
+    private String firstLanguageName = "";
+    private String secondLanguageName = "";
+
+    private void setConversationState(int state) {
+        conversationState = state;
+        refreshConversationStatus();
+    }
+
+    private void refreshConversationStatus() {
+        if (conversationStatus == null || conversationWaveform == null || !isAdded()) {
+            return;
+        }
+        conversationWaveform.setActive(conversationState == 2);
+        switch (conversationState) {
+            case 1:
+                conversationStatus.setText(getString(R.string.status_listening, firstLanguageName, secondLanguageName));
+                break;
+            case 2:
+                conversationStatus.setText(R.string.status_hearing);
+                break;
+            case 3:
+                conversationStatus.setText(R.string.status_working);
+                break;
+            default:
+                conversationStatus.setText(R.string.status_preparing);
+        }
+    }
+
     private void setFirstLanguage(CustomLocale language) {
         // new language setting in the WalkieTalkieService
         walkieTalkieServiceCommunicator.changeFirstLanguage(language);
         // save firstLanguage selected
         global.setFirstLanguage(language, null);
         // change language displayed
-        firstLanguageSelector.setText(language.getDisplayNameWithoutTTS());
+        firstLanguageSelector.setText(LanguageFlags.label(language));
+        firstLanguageName = language.getDisplayNameWithoutTTS();
+        refreshConversationStatus();
         leftMicLanguage.setText(language.getDisplayNameWithoutTTS());
     }
 
@@ -637,7 +677,9 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
         // save secondLanguage selected
         global.setSecondLanguage(language, null);
         // change language displayed
-        secondLanguageSelector.setText(language.getDisplayNameWithoutTTS());
+        secondLanguageSelector.setText(LanguageFlags.label(language));
+        secondLanguageName = language.getDisplayNameWithoutTTS();
+        refreshConversationStatus();
         rightMicLanguage.setText(language.getDisplayNameWithoutTTS());
     }
 
@@ -746,6 +788,7 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
         @Override
         public void onVoiceStarted(int mode) {
             super.onVoiceStarted(mode);
+            setConversationState(2);
             if(mode == VoiceTranslationService.AUTO_LANGUAGE && !microphone.isMute()) {
                 microphone.onVoiceStarted(true);
                 Log.e("onVoiceStart", "onVoiceStart center");
@@ -761,6 +804,7 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
         @Override
         public void onVoiceEnded() {
             super.onVoiceEnded();
+            setConversationState(3);
             microphone.onVoiceEnded(true);
             leftMicrophone.onVoiceEnded(true);
             rightMicrophone.onVoiceEnded(true);
@@ -769,6 +813,9 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
         @Override
         public void onVolumeLevel(float volumeLevel) {
             super.onVolumeLevel(volumeLevel);
+            if (conversationWaveform != null) {
+                conversationWaveform.addLevel(volumeLevel);
+            }
             if(microphone.isListening()) {
                 microphone.updateVolumeLevel(volumeLevel);
             }else if(leftMicrophone.isListening()){
@@ -781,6 +828,7 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
         @Override
         public void onMicActivated() {
             super.onMicActivated();
+            setConversationState(1);
             Log.d("mic", "onMicActivated");
             if(!microphone.isActivated()) {
                 microphone.activate(false);
@@ -796,6 +844,7 @@ public class WalkieTalkieFragment extends VoiceTranslationFragment {
         @Override
         public void onMicDeactivated() {
             super.onMicDeactivated();
+            setConversationState(3);
             if (microphone.getState() == ButtonMic.STATE_NORMAL && microphone.isActivated()) {
                 microphone.deactivate(DeactivableButton.DEACTIVATED);
             }

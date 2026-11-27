@@ -38,6 +38,7 @@ import nie.translator.rtranslator.Global;
 import nie.translator.rtranslator.R;
 import nie.translator.rtranslator.settings.SettingsActivity;
 import nie.translator.rtranslator.tools.CustomLocale;
+import nie.translator.rtranslator.tools.LanguageFlags;
 
 /**
  * The home screen: the brand, the two languages of the conversation, and the button that starts it.
@@ -90,8 +91,8 @@ public class HomeFragment extends Fragment {
                     final CustomLocale second = global.getSecondLanguage(true);
                     mainHandler.post(() -> {
                         if (!isAdded()) return;
-                        if (first != null) firstLanguageText.setText(first.getDisplayNameWithoutTTS());
-                        if (second != null) secondLanguageText.setText(second.getDisplayNameWithoutTTS());
+                        if (first != null) firstLanguageText.setText(LanguageFlags.label(first));
+                        if (second != null) secondLanguageText.setText(LanguageFlags.label(second));
                     });
                 } catch (Throwable ignored) {
                     // the names stay as they are, the Conversation screen has its own selectors
@@ -114,7 +115,7 @@ public class HomeFragment extends Fragment {
                     });
                     final String[] names = new String[languages.size()];
                     for (int i = 0; i < names.length; i++) {
-                        names[i] = languages.get(i).getDisplayNameWithoutTTS();
+                        names[i] = LanguageFlags.label(languages.get(i));
                     }
                     mainHandler.post(() -> {
                         if (!isAdded() || names.length == 0) return;
@@ -124,10 +125,10 @@ public class HomeFragment extends Fragment {
                                     CustomLocale chosen = languages.get(which);
                                     if (first) {
                                         global.setFirstLanguage(chosen, null);
-                                        firstLanguageText.setText(names[which]);
+                                        firstLanguageText.setText(LanguageFlags.label(chosen));
                                     } else {
                                         global.setSecondLanguage(chosen, null);
-                                        secondLanguageText.setText(names[which]);
+                                        secondLanguageText.setText(LanguageFlags.label(chosen));
                                     }
                                 })
                                 .show();
@@ -151,8 +152,8 @@ public class HomeFragment extends Fragment {
                         if (!isAdded()) return;
                         global.setFirstLanguage(second, null);
                         global.setSecondLanguage(first, null);
-                        firstLanguageText.setText(second.getDisplayNameWithoutTTS());
-                        secondLanguageText.setText(first.getDisplayNameWithoutTTS());
+                        firstLanguageText.setText(LanguageFlags.label(second));
+                        secondLanguageText.setText(LanguageFlags.label(first));
                     });
                 } catch (Throwable ignored) {
                 }

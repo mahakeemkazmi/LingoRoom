@@ -59,6 +59,7 @@
     <!-- Lingo Room brand colours, see brand/README.md -->
     <color name="brand_purple">#520380</color>
     <color name="brand_blue">#00B4FF</color>
+    <color name="home_card_stroke">#33520380</color>
     <color name="brand_yellow">#FFB025</color>
     <color name="brand_lavender">#F5F3FF</color>
     <color name="brand_navy">#171B38</color>

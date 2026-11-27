@@ -150,6 +150,24 @@ public class IndicSpeechEngine implements Recognizer.AlternativeRecognizer {
         }
     }
 
+    /**
+     * Removes the downloaded model of a language from the phone.
+     * @return false if it could not be removed (for example because it is being downloaded right now)
+     */
+    public static boolean delete(Context context, String language) {
+        if (language.equals(downloadingLanguage)) {
+            return false;
+        }
+        setEnabled(context, language, false);
+        File model = modelFile(context, language);
+        return !model.exists() || model.delete();
+    }
+
+    /** @return the size in bytes of the downloaded model of a language, 0 if there is none */
+    public static long downloadedBytes(Context context, String language) {
+        return modelFile(context, language).length();
+    }
+
     /** @return the language being downloaded right now, or null */
     @Nullable
     public static String getDownloadingLanguage() {
