@@ -256,7 +256,7 @@
     <string name="history_delete_question">Delete this conversation from this phone?</string>
     <string name="preference_title_save_history">Save conversation history</string>
     <string name="preference_description_save_history">Keep conversations in History, on this phone only. Turn off to stop saving new ones.</string>
-    <string name="guest_title">Invite a guest</string>
+    <string name="guest_title">Invite people</string>
     <string name="guest_steps">The other person does not need the app.\n\n1. Put both phones on the same Wi-Fi, or turn on your hotspot and let them join it.\n2. They scan this code with their camera.\n\nThey will read the conversation in %1$s on their own phone and can write or dictate replies. They can also simply speak towards your phone.</string>
     <string name="guest_no_network">Your phone is not on a Wi-Fi network.\n\nConnect to the same Wi-Fi as the other person and try again, or let this phone make a small private Wi-Fi for the two of you. It works with no internet.</string>
     <string name="guest_make_hotspot">Make private Wi-Fi</string>
@@ -267,7 +267,8 @@
     <string name="guest_next">Next</string>
     <!-- Address of the guest relay (see the relay folder). Empty: guests can only join on the local network. -->
     <string name="guest_relay_url" translatable="false">https://lingoroom-relay.maakaz.workers.dev</string>
-    <string name="guest_steps_online">The other person does not need the app, only internet on their phone.\n\nIf they are with you, they scan this code with their camera. If they are somewhere else, tap Send link. Then they hold the microphone button to speak in %1$s, or write.</string>
+    <string name="guest_steps_online">This is a room. Up to 25 people can join with this link or code, from anywhere, without the app.\n\nEach person picks their own language (%2$s or %1$s), then holds the microphone button to speak, or writes. Everyone reads and hears the others in the language they picked.</string>
+    <string name="guest_same_room">The others are here with me, or I hear them on a loudspeaker</string>
     <string name="guest_use_wifi">No internet</string>
     <string name="guest_use_internet">Use internet</string>
     <string name="guest_description">Guest link is on.\n\nSpeak into this phone as usual. The middle microphone listens by itself. Your guest reads and hears your words on their own phone, and their replies are spoken here. While the guest link is on, this screen shows only your language.</string>
@@ -294,7 +295,7 @@
     <string name="offline_one_at_a_time">Another pack is downloading. Please wait for it to finish.</string>
     <string name="offline_more_settings">More settings</string>
     <string name="guest_send_link">Send link</string>
-    <string name="guest_send_text">Join my translated conversation on Lingo Room. Open this link, tap the yellow button, then hold the microphone to speak: %1$s</string>
+    <string name="guest_send_text">Join my Lingo Room. Open this link, choose your language, then hold the microphone to speak: %1$s</string>
     <string name="call_assist_label">Lingo Room call mode</string>
     <string name="call_assist_summary">Lets Lingo Room keep listening during a phone call</string>
     <string name="call_assist_description">Experimental. Android only lets an app use the microphone during a phone call if this is turned on. Lingo Room uses it for that alone: it does not read your screen, your messages or what you type, and nothing leaves your phone.</string>

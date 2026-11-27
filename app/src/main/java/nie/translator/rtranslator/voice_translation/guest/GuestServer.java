@@ -23,6 +23,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.LinkedHashMap;
@@ -31,53 +32,69 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * A very small web server that runs on the host phone for one guest conversation.
- * A guest on the same Wi-Fi (or on the host's hotspot) opens the page in a browser, reads the conversation
- * in their language and can write back. Nothing leaves the local network. Pure Java, no Android classes.
+ * The state of a room (a conversation followed by guests in the browser of their own phones) and a very small
+ * web server that serves it on the local network. Over the internet the same state travels through the relay.
+ * Every message is kept in two languages, each guest reads and hears the one they chose. Pure Java.
  */
 public final class GuestServer {
-    public interface TextListener {
-        void onGuestText(String text);
+    public static final String HOST_ID = "host";
+
+    public interface GuestListener {
+        /** @param language the language the guest chose, id and name say who the guest is */
+        void onGuestText(String text, String language, String id, String name);
+
+        /** The guest wants to hear a message again, in their language. */
+        void onGuestReplay(String key, String language);
     }
 
     private static final int MAX_HEADER_BYTES = 8192;
     private static final int MAX_BODY_BYTES = 4096;
     private static final int MAX_TEXT_CHARS = 500;
     private static final int MAX_MESSAGES = 300;
+    private static final int MAX_SOUNDS = 16;
 
     private static final class Entry {
         String key;
-        boolean host;
+        String from;
+        String name;
         String original;
+        String originalLanguage;
         String translated;
+        String translatedLanguage;
         boolean isFinal;
+        long revision;
+    }
+
+    private static final class Sound {
+        byte[] wav;
+        String language;
+        String from;
         long revision;
     }
 
     private final String page;
     private final String token;
     private final LinkedHashMap<String, Entry> messages = new LinkedHashMap<>();
-    private final String[] labels;
-    private final LinkedHashMap<String, byte[]> audio = new LinkedHashMap<>();   // the last spoken phrases
-    private final LinkedHashMap<String, Long> soundRevisions = new LinkedHashMap<>();
-    private final ExecutorService workers = Executors.newFixedThreadPool(6);
+    private final LinkedHashMap<String, Sound> sounds = new LinkedHashMap<>();   // the last spoken phrases
+    private final String[] englishLabels;
+    private final LinkedHashMap<String, String[]> labels = new LinkedHashMap<>();   // the texts of the page, by language
+    private final String[] languages = {"", "", "", ""};   // code and name of the two languages of the room
+    private final ExecutorService workers = Executors.newFixedThreadPool(8);
     private ServerSocket serverSocket;
     private volatile boolean running;
-    private volatile TextListener textListener;
-    private volatile TextListener replayListener;
+    private volatile GuestListener guestListener;
     private volatile Runnable changeListener;
-    private volatile String speechLanguage = "";
     private volatile long lastGuestContact;
     private volatile long lastGuestListening;
     private long revision;
 
     /**
      * @param page the html of the guest page
-     * @param labels the texts of the page, in English until they are replaced with setLabel
+     * @param labels the texts of the page in English
      */
     public GuestServer(String page, String[] labels) {
         this.page = page;
-        this.labels = labels.clone();
+        this.englishLabels = labels.clone();
         byte[] random = new byte[9];
         new SecureRandom().nextBytes(random);
         StringBuilder builder = new StringBuilder();
@@ -149,12 +166,21 @@ public final class GuestServer {
         return "/g/" + token;
     }
 
-    /** @return true if a guest page has asked for news in the last few seconds */
+    /** @return true if a guest page on the local network has asked for news in the last few seconds */
     public boolean isGuestConnected() {
         return System.currentTimeMillis() - lastGuestContact < 4000;
     }
 
-    /** @param listener called every time the conversation, the language or a text of the page changes */
+    /** @return true if a guest page on the local network is playing the conversation aloud right now */
+    public boolean isGuestListening() {
+        return System.currentTimeMillis() - lastGuestListening < 4000;
+    }
+
+    public void setGuestListener(GuestListener listener) {
+        guestListener = listener;
+    }
+
+    /** @param listener called every time the conversation, the languages or a text of the page changes */
     public void setChangeListener(Runnable listener) {
         changeListener = listener;
     }
@@ -173,118 +199,147 @@ public final class GuestServer {
         return revision;
     }
 
-    /** @return true if a guest page on the local network is reading the conversation aloud right now */
-    public boolean isGuestListening() {
-        return System.currentTimeMillis() - lastGuestListening < 4000;
-    }
-
-    /** @param listener receives the key of a message the guest wants to hear again */
-    public void setReplayListener(TextListener listener) {
-        replayListener = listener;
-    }
-
-    /** @return what the guest reads for a message said by the host, or null */
-    public synchronized String getTranslated(String key) {
-        Entry entry = messages.get(key);
-        return entry != null && entry.host ? entry.translated : null;
-    }
-
-    public void setTextListener(TextListener listener) {
-        textListener = listener;
-    }
-
-    /** @param languageCode the language the guest reads, used by the page to read aloud */
-    public void setSpeechLanguage(String languageCode) {
-        speechLanguage = languageCode == null ? "" : languageCode;
+    /** Sets the two languages the guests can choose from. */
+    public synchronized void setLanguages(String firstCode, String firstName, String secondCode, String secondName) {
+        languages[0] = firstCode == null ? "" : firstCode;
+        languages[1] = firstName == null ? "" : firstName;
+        languages[2] = secondCode == null ? "" : secondCode;
+        languages[3] = secondName == null ? "" : secondName;
         notifyChanged();
     }
 
-    public synchronized void setLabel(int index, String text) {
-        if (index >= 0 && index < labels.length && text != null && !text.trim().isEmpty()) {
-            labels[index] = text.trim();
-            notifyChanged();
+    /** Sets a text of the page in a language. Texts that are not set stay in English. */
+    public synchronized void setLabel(String language, int index, String text) {
+        if (language == null || index < 0 || index >= englishLabels.length || text == null || text.trim().isEmpty()) {
+            return;
         }
+        String[] translated = labels.get(language);
+        if (translated == null) {
+            translated = englishLabels.clone();
+            labels.put(language, translated);
+        }
+        translated[index] = text.trim();
+        notifyChanged();
+    }
+
+    public synchronized void clearLabels() {
+        labels.clear();
+        notifyChanged();
     }
 
     /**
      * Adds a message of the conversation, or updates it while its translation is still growing.
      *
-     * @param host true if the host of the conversation said it, false if the guest did
+     * @param from who said it: HOST_ID or the id of a guest
      */
-    public synchronized void publish(String key, boolean host, String original, String translated, boolean isFinal) {
+    public synchronized void publish(String key, String from, String name, String original, String originalLanguage, String translated, String translatedLanguage, boolean isFinal) {
         Entry entry = messages.get(key);
         if (entry == null) {
             entry = new Entry();
             entry.key = key;
             messages.put(key, entry);
             if (messages.size() > MAX_MESSAGES) {
-                String oldest = messages.keySet().iterator().next();
-                messages.remove(oldest);
+                messages.remove(messages.keySet().iterator().next());
             }
         }
-        entry.host = host;
+        entry.from = from == null ? HOST_ID : from;
+        entry.name = name == null ? "" : name;
         entry.original = original == null ? "" : original;
+        entry.originalLanguage = originalLanguage == null ? "" : originalLanguage;
         entry.translated = translated == null ? "" : translated;
+        entry.translatedLanguage = translatedLanguage == null ? "" : translatedLanguage;
         entry.isFinal = isFinal;
         entry.revision = ++revision;
         notifyChanged();
     }
 
+    /** @return the text of a message in a language, or null */
+    public synchronized String getText(String key, String language) {
+        Entry entry = messages.get(key);
+        if (entry == null || language == null) {
+            return null;
+        }
+        if (language.equals(entry.originalLanguage)) {
+            return entry.original;
+        }
+        return language.equals(entry.translatedLanguage) ? entry.translated : null;
+    }
+
     /**
-     * Adds a sound (a wav file with one spoken phrase). The page of the guest plays the sounds in the order
-     * they were added, so a long translation can be heard phrase by phrase while it is still being written.
+     * Adds a sound (a wav file with one spoken phrase). The pages of the guests who chose that language play the
+     * sounds in the order they were added, so a long translation is heard phrase by phrase.
+     *
+     * @param from who said the phrase (that person does not hear it again)
      */
-    public synchronized void addSound(String name, byte[] wav) {
+    public synchronized void addSound(String name, byte[] wav, String language, String from) {
         if (wav == null) {
             return;
         }
-        audio.put(name, wav);
-        while (audio.size() > 12) {
-            String oldest = audio.keySet().iterator().next();
-            audio.remove(oldest);
-            soundRevisions.remove(oldest);
+        Sound sound = new Sound();
+        sound.wav = wav;
+        sound.language = language == null ? "" : language;
+        sound.from = from == null ? "" : from;
+        sound.revision = ++revision;
+        sounds.put(name, sound);
+        while (sounds.size() > MAX_SOUNDS) {
+            sounds.remove(sounds.keySet().iterator().next());
         }
-        soundRevisions.put(name, ++revision);
         notifyChanged();
     }
 
-    private synchronized byte[] getAudio(String key) {
-        return audio.get(key);
+    private synchronized byte[] getSound(String name) {
+        Sound sound = sounds.get(name);
+        return sound == null ? null : sound.wav;
     }
 
-    /** @return the state of the conversation as json, with only the messages changed after the given revision */
+    /** @return the state of the room as json, with only the messages and sounds changed after the given revision */
     public synchronized String eventsJson(long since) {
         StringBuilder json = new StringBuilder();
         json.append("{\"rev\":").append(revision);
-        json.append(",\"lang\":").append(quote(speechLanguage));
-        json.append(",\"labels\":[");
-        for (int i = 0; i < labels.length; i++) {
-            if (i > 0) json.append(',');
-            json.append(quote(labels[i]));
+        json.append(",\"langs\":[{\"c\":").append(quote(languages[0])).append(",\"n\":").append(quote(languages[1]));
+        json.append("},{\"c\":").append(quote(languages[2])).append(",\"n\":").append(quote(languages[3])).append("}]");
+        json.append(",\"labels\":{\"en\":").append(array(englishLabels));
+        for (Map.Entry<String, String[]> item : labels.entrySet()) {
+            if (!item.getKey().equals("en")) {
+                json.append(',').append(quote(item.getKey())).append(':').append(array(item.getValue()));
+            }
         }
-        json.append("],\"messages\":[");
+        json.append("},\"messages\":[");
         boolean first = true;
-        for (Map.Entry<String, Entry> item : messages.entrySet()) {
-            Entry entry = item.getValue();
+        for (Entry entry : messages.values()) {
             if (entry.revision <= since) continue;
             if (!first) json.append(',');
             first = false;
             json.append("{\"key\":").append(quote(entry.key));
-            json.append(",\"host\":").append(entry.host);
+            json.append(",\"from\":").append(quote(entry.from));
+            json.append(",\"name\":").append(quote(entry.name));
             json.append(",\"original\":").append(quote(entry.original));
+            json.append(",\"ol\":").append(quote(entry.originalLanguage));
             json.append(",\"translated\":").append(quote(entry.translated));
+            json.append(",\"tl\":").append(quote(entry.translatedLanguage));
             json.append(",\"final\":").append(entry.isFinal).append('}');
         }
         json.append("],\"sounds\":[");
         first = true;
-        for (Map.Entry<String, Long> sound : soundRevisions.entrySet()) {
-            if (sound.getValue() <= since) continue;
+        for (Map.Entry<String, Sound> item : sounds.entrySet()) {
+            if (item.getValue().revision <= since) continue;
             if (!first) json.append(',');
             first = false;
-            json.append(quote(sound.getKey()));
+            json.append("{\"n\":").append(quote(item.getKey()));
+            json.append(",\"l\":").append(quote(item.getValue().language));
+            json.append(",\"f\":").append(quote(item.getValue().from)).append('}');
         }
         json.append("]}");
         return json.toString();
+    }
+
+    private static String array(String[] values) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < values.length; i++) {
+            if (i > 0) json.append(',');
+            json.append(quote(values[i]));
+        }
+        return json.append(']').toString();
     }
 
     static String quote(String text) {
@@ -300,6 +355,39 @@ public final class GuestServer {
             }
         }
         return out.append('"').toString();
+    }
+
+    /** Makes a text received from a browser safe to show: one line, limited length. */
+    static String clean(String text, int maxChars) {
+        if (text == null) {
+            return "";
+        }
+        String cleaned = text.replaceAll("\\s+", " ").trim();
+        return cleaned.length() > maxChars ? cleaned.substring(0, maxChars) : cleaned;
+    }
+
+    private static String parameter(String query, String name) {
+        for (String part : query.split("&")) {
+            if (part.startsWith(name + "=")) {
+                try {
+                    return URLDecoder.decode(part.substring(name.length() + 1), "UTF-8");
+                } catch (Throwable error) {
+                    return "";
+                }
+            }
+        }
+        return "";
+    }
+
+    private static String readBody(InputStream input, int length) throws IOException {
+        byte[] body = new byte[length];
+        int offset = 0;
+        while (offset < length) {
+            int read = input.read(body, offset, length - offset);
+            if (read < 0) break;
+            offset += read;
+        }
+        return new String(body, 0, offset, StandardCharsets.UTF_8);
     }
 
     private void handle(Socket client) {
@@ -347,25 +435,22 @@ public final class GuestServer {
             }
             OutputStream output = socket.getOutputStream();
             String base = getPath();
+            GuestListener listener = guestListener;
             if (method.equals("GET") && target.equals(base)) {
                 respond(output, "200 OK", "text/html; charset=utf-8", page);
             } else if (method.equals("GET") && target.equals(base + "/events")) {
                 lastGuestContact = System.currentTimeMillis();
+                if (parameter(query, "aloud").equals("1")) {
+                    lastGuestListening = System.currentTimeMillis();
+                }
                 long since = 0;
-                for (String part : query.split("&")) {
-                    if (part.equals("aloud=1")) {
-                        lastGuestListening = System.currentTimeMillis();
-                    }
-                    if (part.startsWith("since=")) {
-                        try {
-                            since = Long.parseLong(part.substring(6));
-                        } catch (NumberFormatException ignored) {
-                        }
-                    }
+                try {
+                    since = Long.parseLong(parameter(query, "since"));
+                } catch (NumberFormatException ignored) {
                 }
                 respond(output, "200 OK", "application/json; charset=utf-8", eventsJson(since));
             } else if (method.equals("GET") && target.startsWith(base + "/audio/")) {
-                byte[] wav = getAudio(target.substring(base.length() + 7));
+                byte[] wav = getSound(target.substring(base.length() + 7));
                 if (wav == null) {
                     respond(output, "404 Not Found", "text/plain; charset=utf-8", "not found");
                 } else {
@@ -375,38 +460,19 @@ public final class GuestServer {
                     output.write(wav);
                     output.flush();
                 }
-            } else if (method.equals("POST") && target.equals(base + "/replay")) {
-                byte[] body = new byte[Math.max(0, Math.min(contentLength, 64))];
-                int offset = 0;
-                while (offset < body.length) {
-                    int read = input.read(body, offset, body.length - offset);
-                    if (read < 0) break;
-                    offset += read;
-                }
-                TextListener listener = replayListener;
-                if (listener != null && offset > 0) {
-                    listener.onGuestText(new String(body, 0, offset, StandardCharsets.UTF_8).trim());
-                }
-                respond(output, "200 OK", "text/plain; charset=utf-8", "ok");
-            } else if (method.equals("POST") && target.equals(base + "/say")) {
+            } else if (method.equals("POST") && (target.equals(base + "/say") || target.equals(base + "/replay"))) {
                 if (contentLength < 0 || contentLength > MAX_BODY_BYTES) {
                     respond(output, "413 Payload Too Large", "text/plain; charset=utf-8", "too long");
                     return;
                 }
-                byte[] body = new byte[contentLength];
-                int offset = 0;
-                while (offset < contentLength) {
-                    int read = input.read(body, offset, contentLength - offset);
-                    if (read < 0) break;
-                    offset += read;
-                }
-                String text = new String(body, 0, offset, StandardCharsets.UTF_8).replaceAll("\\s+", " ").trim();
-                if (text.length() > MAX_TEXT_CHARS) {
-                    text = text.substring(0, MAX_TEXT_CHARS);
-                }
-                TextListener listener = textListener;
-                if (!text.isEmpty() && listener != null) {
-                    listener.onGuestText(text);
+                String body = clean(readBody(input, contentLength), MAX_TEXT_CHARS);
+                if (!body.isEmpty() && listener != null) {
+                    String language = clean(parameter(query, "lang"), 16);
+                    if (target.endsWith("/say")) {
+                        listener.onGuestText(body, language, clean(parameter(query, "id"), 40), clean(parameter(query, "name"), 30));
+                    } else {
+                        listener.onGuestReplay(body, language);
+                    }
                 }
                 respond(output, "200 OK", "text/plain; charset=utf-8", "ok");
             } else {
@@ -425,5 +491,4 @@ public final class GuestServer {
         output.write(bytes);
         output.flush();
     }
-
 }

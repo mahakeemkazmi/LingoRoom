@@ -18,10 +18,12 @@ package nie.translator.rtranslator.voice_translation.guest;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Base64;
 
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -33,33 +35,32 @@ import okio.ByteString;
 
 /**
  * Connection of the host phone to the guest relay on the internet (see the relay folder of the project).
- * The relay only forwards: what the guest writes or says arrives here, and the conversation goes back.
+ * The relay only forwards: what the guests write or say arrives here, and the conversation goes back.
  */
 final class RelayClient {
     interface Listener {
         void onGuestJoined();
 
-        void onGuestText(String text);
+        void onGuestText(String text, String language, String id, String name);
 
-        /** @param key the message the guest wants to hear again */
-        void onGuestReplay(String key);
+        void onGuestReplay(String key, String language);
 
         /** @param samples what the guest said, mono, 16 kHz */
-        void onGuestAudio(float[] samples);
+        void onGuestAudio(float[] samples, String language, String id, String name);
     }
 
     private static final int MAX_AUDIO_BYTES = 30 * 16000 * 2;   // 30 seconds
     private static final int MIN_AUDIO_BYTES = 16000 * 2 * 3 / 10;   // 0.3 seconds
+    private static final int MAX_SPEAKERS = 30;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final OkHttpClient client = new OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS).build();
     private final String url;
     private final Listener listener;
-    private final ByteArrayOutputStream audio = new ByteArrayOutputStream();
+    private final HashMap<String, ByteArrayOutputStream> audio = new HashMap<>();   // the voice of each guest who is talking
+    private final HashMap<String, Long> listening = new HashMap<>();   // the guests who play the conversation aloud
     private WebSocket socket;
     private volatile boolean open;
     private volatile boolean closed;
-    private volatile long lastGuestContact;
-    private volatile long lastGuestListening;
 
     RelayClient(String url, Listener listener) {
         this.url = url;
@@ -78,51 +79,60 @@ final class RelayClient {
 
             @Override
             public void onMessage(WebSocket webSocket, String text) {
-                lastGuestContact = System.currentTimeMillis();
                 try {
                     JSONObject json = new JSONObject(text);
                     String type = json.optString("type");
+                    String id = GuestServer.clean(json.optString("id"), 40);
+                    String language = GuestServer.clean(json.optString("lang"), 16);
+                    String name = GuestServer.clean(json.optString("name"), 30);
                     if (type.equals("hello")) {
                         listener.onGuestJoined();
                     } else if (type.equals("aloud")) {
-                        lastGuestListening = json.optBoolean("on") ? System.currentTimeMillis() : 0;
-                    } else if (type.equals("replay")) {
-                        listener.onGuestReplay(json.optString("key"));
-                    } else if (type.equals("say")) {
-                        String said = json.optString("text").replaceAll("\\s+", " ").trim();
-                        if (said.length() > 500) {
-                            said = said.substring(0, 500);
+                        synchronized (listening) {
+                            if (json.optBoolean("on")) {
+                                if (listening.size() < 100) listening.put(id, System.currentTimeMillis());
+                            } else {
+                                listening.remove(id);
+                            }
                         }
+                    } else if (type.equals("replay")) {
+                        listener.onGuestReplay(GuestServer.clean(json.optString("key"), 40), language);
+                    } else if (type.equals("say")) {
+                        String said = GuestServer.clean(json.optString("text"), 500);
                         if (!said.isEmpty()) {
-                            listener.onGuestText(said);
+                            listener.onGuestText(said, language, id, name);
+                        }
+                    } else if (type.equals("pcm")) {
+                        byte[] chunk = Base64.decode(json.optString("d"), Base64.DEFAULT);
+                        synchronized (audio) {
+                            ByteArrayOutputStream buffer = audio.get(id);
+                            if (buffer == null) {
+                                if (audio.size() >= MAX_SPEAKERS) {
+                                    return;
+                                }
+                                buffer = new ByteArrayOutputStream();
+                                audio.put(id, buffer);
+                            }
+                            if (buffer.size() + chunk.length <= MAX_AUDIO_BYTES) {
+                                buffer.write(chunk, 0, chunk.length);
+                            }
                         }
                     } else if (type.equals("audio_end")) {
                         byte[] bytes;
                         synchronized (audio) {
-                            bytes = audio.toByteArray();
-                            audio.reset();
+                            ByteArrayOutputStream buffer = audio.remove(id);
+                            bytes = buffer == null ? new byte[0] : buffer.toByteArray();
                         }
                         if (bytes.length >= MIN_AUDIO_BYTES) {
                             float[] samples = new float[bytes.length / 2];
                             for (int i = 0; i < samples.length; i++) {
                                 samples[i] = (short) ((bytes[2 * i] & 0xFF) | (bytes[2 * i + 1] << 8)) / 32768f;
                             }
-                            listener.onGuestAudio(samples);
+                            listener.onGuestAudio(samples, language, id, name);
                         }
                     }
                 } catch (Throwable ignored) {
                     // a strange message from a browser must never disturb the conversation
-                }
-            }
-
-            @Override
-            public void onMessage(WebSocket webSocket, ByteString bytes) {
-                lastGuestContact = System.currentTimeMillis();
-                synchronized (audio) {
-                    if (audio.size() + bytes.size() <= MAX_AUDIO_BYTES) {
-                        byte[] chunk = bytes.toByteArray();
-                        audio.write(chunk, 0, chunk.length);
-                    }
                 }
             }
 
@@ -149,13 +159,20 @@ final class RelayClient {
         return open;
     }
 
-    boolean isGuestConnected() {
-        return System.currentTimeMillis() - lastGuestContact < 5 * 60 * 1000;
-    }
-
-    /** @return true if the page of the guest is reading the conversation aloud (it tells us every few seconds) */
+    /** @return true if the page of at least one guest is playing the conversation aloud (pages tell us every few seconds) */
     boolean isGuestListening() {
-        return open && System.currentTimeMillis() - lastGuestListening < 12000;
+        if (!open) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        synchronized (listening) {
+            for (Long time : listening.values()) {
+                if (now - time < 12000) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     synchronized void send(String text) {
