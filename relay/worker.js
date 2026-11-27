@@ -4,7 +4,7 @@
 import page from "./guest_page.html";
 
 const MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
-const MAX_GUESTS = 2;
+const MAX_GUESTS = 25;
 const ROOM_LIFETIME_MS = 2 * 60 * 60 * 1000;
 
 export default {

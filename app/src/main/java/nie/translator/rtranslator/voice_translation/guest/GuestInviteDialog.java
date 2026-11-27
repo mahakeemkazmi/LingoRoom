@@ -25,6 +25,7 @@ import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -46,13 +47,16 @@ import nie.translator.rtranslator.R;
  * Shows the code a guest scans to follow the conversation in the browser of their own phone.
  */
 public final class GuestInviteDialog {
+    private static String firstLanguageName = "";
+
     private GuestInviteDialog() {
     }
 
     /**
      * @param onChanged called when the guest link has been opened or ended
      */
-    public static void show(Activity activity, String guestLanguageName, Runnable onChanged) {
+    public static void show(Activity activity, String hostLanguageName, String guestLanguageName, Runnable onChanged) {
+        firstLanguageName = hostLanguageName;
         show(activity, guestLanguageName, GuestSession.hasRelay(activity), onChanged);
     }
 
@@ -79,7 +83,7 @@ public final class GuestInviteDialog {
         }
         String steps;
         if (online) {
-            steps = activity.getString(R.string.guest_steps_online, guestLanguageName);
+            steps = activity.getString(R.string.guest_steps_online, guestLanguageName, firstLanguageName);
         } else if (GuestHotspot.isActive()) {
             steps = activity.getString(R.string.guest_steps_hotspot_page);
         } else {
@@ -175,6 +179,16 @@ public final class GuestInviteDialog {
             linkView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
             linkView.setPadding(0, dp(activity, 8), 0, 0);
             content.addView(linkView);
+        }
+        if (link != null && canSend) {
+            // decides whether this phone listens for both languages and whether the guests need to hear the originals
+            CheckBox together = new CheckBox(activity);
+            together.setText(R.string.guest_same_room);
+            together.setChecked(GuestSession.isSameRoom());
+            together.setOnCheckedChangeListener((button, checked) -> GuestSession.setSameRoom(checked));
+            LinearLayout.LayoutParams togetherParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            togetherParams.topMargin = dp(activity, 8);
+            content.addView(together, togetherParams);
         }
         if (link != null && canSend) {
             // the other person can be anywhere: the link can be sent with any messaging app

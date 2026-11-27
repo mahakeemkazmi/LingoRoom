@@ -8,17 +8,20 @@
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body { font-family: Roboto, system-ui, sans-serif; background: #F5F3FF; color: #171B38; display: flex; flex-direction: column; }
-  header { background: #520380; color: #fff; padding: 14px 16px; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  header { background: #520380; color: #fff; padding: 12px 16px; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
   header span.dot { width: 10px; height: 10px; border-radius: 50%; background: #FFB025; }
   header span.dot.on { background: #00B4FF; }
+  header span.title { flex: 1; }
+  #language { background: rgba(255, 255, 255, .16); color: #fff; font-size: 15px; font-weight: 500; padding: 7px 12px; border-radius: 16px; display: none; }
   #list { flex: 1; overflow-y: auto; padding: 12px; }
+  .who { font-size: 13px; color: #5b5f7a; margin: 0 4px 2px; }
   .msg { max-width: 88%; margin: 0 0 10px; padding: 10px 14px; border-radius: 16px; font-size: 19px; line-height: 1.35; word-wrap: break-word; }
-  .msg.them { background: #fff; border: 1px solid #E3DCF5; border-bottom-left-radius: 4px; margin-right: auto; }
-  .msg.me { background: #520380; color: #fff; border-bottom-right-radius: 4px; margin-left: auto; }
+  .msg.them { background: #fff; border: 1px solid #E3DCF5; border-bottom-left-radius: 4px; margin-right: auto; display: flex; align-items: flex-start; gap: 10px; width: fit-content; }
+  .msg.them span { flex: 1; }
+  .again { flex: none; width: 38px; height: 38px; border-radius: 19px; background: #F5F3FF; color: #520380; display: flex; align-items: center; justify-content: center; padding: 0; }
+  .msg.me { background: #520380; color: #fff; border-bottom-right-radius: 4px; margin-left: auto; width: fit-content; }
   .msg.wait { opacity: .6; }
   #hint { margin: 0 12px 8px; padding: 8px 12px; font-size: 15px; color: #171B38; background: #E6F7FF; border-radius: 10px; }
-  #start { position: fixed; inset: 0; background: rgba(23, 27, 56, .82); display: none; align-items: center; justify-content: center; padding: 24px; }
-  #start button { background: #FFB025; color: #171B38; font-size: 22px; font-weight: 700; padding: 22px 26px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 320px; }
   #bar { display: flex; gap: 8px; padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid #E3DCF5; align-items: flex-end; }
   #text { flex: 1; font: inherit; font-size: 18px; padding: 10px 12px; border: 1px solid #C9BEE8; border-radius: 14px; resize: none; min-height: 46px; max-height: 120px; }
   button { font: inherit; border: 0; border-radius: 14px; }
@@ -30,10 +33,17 @@
   #aloud i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; }
   #aloud.on i { background: #00B4FF; }
   #aloud.on i::after { left: 18px; }
+  #start { position: fixed; inset: 0; background: rgba(23, 27, 56, .9); display: flex; align-items: center; justify-content: center; padding: 24px; }
+  #join { background: #fff; border-radius: 20px; padding: 22px; width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 12px; }
+  #join h1 { margin: 0; font-size: 22px; color: #520380; }
+  #join p { margin: 0; font-size: 16px; color: #5b5f7a; }
+  #name { font: inherit; font-size: 18px; padding: 10px 12px; border: 1px solid #C9BEE8; border-radius: 14px; }
+  #join button { background: #FFB025; color: #171B38; font-size: 20px; font-weight: 700; padding: 16px; }
+  #join button:disabled { opacity: .5; }
 </style>
 </head>
 <body>
-<header><span class="dot" id="dot"></span>Lingo Room</header>
+<header><span class="dot" id="dot"></span><span class="title">Lingo Room</span><button id="language" type="button"></button></header>
 <div id="list"></div>
 <button id="aloud" type="button"><i></i><span id="aloudText">Read aloud</span></button>
 <div id="hint">To speak, tap the box below, then the microphone on your keyboard</div>
@@ -42,20 +52,28 @@
   <button id="mic" type="button" aria-label="Microphone"><svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M12,14c1.66,0 3,-1.34 3,-3V5c0,-1.66 -1.34,-3 -3,-3S9,3.34 9,5v6c0,1.66 1.34,3 3,3zM17.3,11c0,3 -2.54,5.1 -5.3,5.1S6.7,14 6.7,11H5c0,3.41 2.72,6.23 6,6.72V21h2v-3.28c3.28,-0.48 6,-3.3 6,-6.72h-1.7z"/></svg></button>
   <button id="send" type="button">Send</button>
 </div>
-<div id="start"><button type="button" id="startButton"><svg viewBox="0 0 24 24" width="56" height="56"><path fill="currentColor" d="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z"/></svg><span id="startText">Tap here to hear the conversation</span></button></div>
+<div id="start"><div id="join">
+  <h1>Lingo Room</h1>
+  <input id="name" type="text" maxlength="30" placeholder="Your name" autocomplete="name">
+  <p id="chooseText">Choose your language</p>
+  <button type="button" id="languageA" disabled>...</button>
+  <button type="button" id="languageB" disabled>...</button>
+</div></div>
 <script>
 (function () {
   var base = location.pathname.replace(/\/$/, "");
   var online = location.protocol === "https:";   // served by the relay: voice is available
-  var list = document.getElementById("list");
-  var text = document.getElementById("text");
-  var send = document.getElementById("send");
-  var aloud = document.getElementById("aloud");
-  var dot = document.getElementById("dot");
-  var hint = document.getElementById("hint");
-  var mic = document.getElementById("mic");
-  var soundKey = null, firstData = true;
-  var since = 0, language = "", readAloud = false, spoken = {}, rows = {}, pending = [], socket = null;
+  function element(id) { return document.getElementById(id); }
+  var list = element("list"), text = element("text"), send = element("send"), aloud = element("aloud"), dot = element("dot");
+  var hint = element("hint"), mic = element("mic"), start = element("start"), nameInput = element("name"), languageButton = element("language");
+  var since = 0, readAloud = false, played = {}, rows = {}, all = {}, order = [], pending = [], socket = null;
+  var languages = [], labels = {}, myLanguage = "", myName = "", announced = null, firstData = true;
+  var myId = "";
+  try { myId = sessionStorage.getItem("lingoRoomId") || ""; } catch (error) {}
+  if (!myId) {
+    for (var n = 0; n < 16; n++) myId += Math.floor(Math.random() * 16).toString(16);
+    try { sessionStorage.setItem("lingoRoomId", myId); } catch (error) {}
+  }
 
   // the host phone makes the sound of each phrase, this page only plays it, one after the other
   var player = new Audio(), queue = [], playing = false;
@@ -73,16 +91,30 @@
     queue.push(address);
     playNext();
   }
+  function wanted(language, from) {
+    // each person hears only their own language, and never what they said themselves
+    return readAloud && language === myLanguage && from !== myId;
+  }
 
   function show(message) {
+    if (!all[message.key]) order.push(message.key);
+    all[message.key] = message;
+    if (!myLanguage) return;
+    var mine = message.from === myId;
     var row = rows[message.key];
     if (!row) {
+      if (!mine && message.name) {
+        var who = document.createElement("div");
+        who.className = "who";
+        who.textContent = message.name;
+        list.appendChild(who);
+      }
       row = document.createElement("div");
       row.dir = "auto";
       rows[message.key] = row;
       list.appendChild(row);
-      if (!message.host) {
-        // the temporary bubble of what the guest just wrote or said is replaced by the real one
+      if (mine) {
+        // the temporary bubble of what this person just wrote or said is replaced by the real one
         for (var i = 0; i < pending.length; i++) {
           if (pending[i].text === null || pending[i].text === message.original) {
             pending[i].row.remove();
@@ -92,30 +124,73 @@
         }
       }
     }
-    // what the host said is shown translated, what the guest said is shown as it was said
-    row.className = "msg " + (message.host ? "them" : "me") + (message.final ? "" : " wait");
-    row.textContent = message.host ? message.translated : message.original;
+    row.className = "msg " + (mine ? "me" : "them") + (message.final ? "" : " wait");
+    if (!row.label) {
+      row.label = document.createElement("span");
+      row.appendChild(row.label);
+    }
+    var shown = message.ol === myLanguage ? message.original : message.translated;
+    row.label.textContent = shown || message.original;
+    if (!mine && message.final && !row.again) {
+      // a small speaker to hear this message again
+      row.again = document.createElement("button");
+      row.again.type = "button";
+      row.again.className = "again";
+      row.again.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02z"/></svg>';
+      row.again.addEventListener("click", function () { hearAgain(message.key); });
+      row.appendChild(row.again);
+    }
     list.scrollTop = list.scrollHeight;
+  }
+
+  function applyLabels() {
+    var mine = labels[myLanguage] || labels.en;
+    if (mine && mine.length >= 8) {
+      text.placeholder = mine[0];
+      send.textContent = mine[1];
+      element("aloudText").textContent = mine[2];
+      hint.textContent = online ? mine[4] : mine[3];
+    }
+    // before the language is chosen the question is asked in every language of the room
+    var question = [], names = [];
+    for (var i = 0; i < languages.length; i++) {
+      var set = labels[languages[i].c] || labels.en;
+      if (set && set.length >= 8) {
+        if (question.indexOf(set[7]) < 0) question.push(set[7]);
+        if (names.indexOf(set[6]) < 0) names.push(set[6]);
+      }
+    }
+    if (question.length) element("chooseText").textContent = question.join(" / ");
+    if (names.length) nameInput.placeholder = names.join(" / ");
   }
 
   function handle(data) {
     dot.className = "dot on";
-    language = data.lang || "";
-    if (data.labels && data.labels.length >= 6) {
-      document.getElementById("startText").textContent = data.labels[5];
-      text.placeholder = data.labels[0];
-      send.textContent = data.labels[1];
-      document.getElementById("aloudText").textContent = data.labels[2];
-      hint.textContent = online ? data.labels[4] : data.labels[3];
+    if (data.langs) {
+      languages = data.langs;
+      var buttons = [element("languageA"), element("languageB")];
+      for (var b = 0; b < 2; b++) {
+        var language = languages[b];
+        buttons[b].textContent = language && language.n ? language.n : "...";
+        buttons[b].disabled = !(language && language.c);
+        if (language && language.c === myLanguage) languageButton.textContent = language.n;
+      }
+      // the host changed a language of the room and ours no longer exists: we ask again
+      if (myLanguage && languages.length === 2 && languages[0].c !== myLanguage && languages[1].c !== myLanguage) {
+        myLanguage = "";
+        start.style.display = "flex";
+      }
     }
+    if (data.labels) labels = data.labels;
+    applyLabels();
     if (data.rev < since) { since = 0; return; }
     for (var i = 0; i < data.messages.length; i++) show(data.messages[i]);
     if (!online && data.sounds) {
       for (var j = 0; j < data.sounds.length; j++) {
-        var name = data.sounds[j];
-        if (spoken[name]) continue;
-        spoken[name] = true;
-        if (readAloud && !firstData) enqueue(base + "/audio/" + encodeURIComponent(name));
+        var sound = data.sounds[j];
+        if (played[sound.n]) continue;
+        played[sound.n] = true;
+        if (!firstData && wanted(sound.l, sound.f)) enqueue(base + "/audio/" + encodeURIComponent(sound.n));
       }
     }
     firstData = false;
@@ -124,7 +199,7 @@
 
   function poll() {
     var request = new XMLHttpRequest();
-    request.open("GET", base + "/events?since=" + since + "&aloud=" + (hears() ? 1 : 0));
+    request.open("GET", base + "/events?since=" + since + "&aloud=" + (readAloud ? 1 : 0));
     request.timeout = 5000;
     request.onload = function () {
       try { handle(JSON.parse(request.responseText)); } catch (error) {}
@@ -137,23 +212,28 @@
     request.send();
   }
 
+  function tell(message) {
+    if (socket && socket.readyState === 1) { socket.send(JSON.stringify(message)); return true; }
+    return false;
+  }
+
   function connect() {
     socket = new WebSocket("wss://" + location.host + base + "/ws?role=guest");
     socket.binaryType = "arraybuffer";
-    socket.onopen = function () { socket.send(JSON.stringify({ type: "hello" })); reportAloud(); };
+    socket.onopen = function () { tell({ type: "hello", id: myId }); reportAloud(); };
     socket.onmessage = function (event) {
       if (typeof event.data !== "string") {
-        // the sound of the phrase announced just before
-        if (soundKey && readAloud && !spoken[soundKey]) {
-          spoken[soundKey] = true;
-          enqueue(URL.createObjectURL(new Blob([event.data], { type: "audio/wav" })));
+        // the sound of the phrase described just before
+        if (announced && !played[announced.key]) {
+          played[announced.key] = true;
+          if (wanted(announced.lang, announced.from)) enqueue(URL.createObjectURL(new Blob([event.data], { type: "audio/wav" })));
         }
-        soundKey = null;
+        announced = null;
         return;
       }
       try {
         var data = JSON.parse(event.data);
-        if (data.type === "audio") { soundKey = data.key; return; }
+        if (data.type === "audio") { announced = data; return; }
         if (data.type === "bye") { dot.className = "dot"; return; }
         if (data.messages) handle(data);
       } catch (error) {}
@@ -164,13 +244,8 @@
     };
   }
 
-  // true if this phone reads the conversation aloud, so the host phone can stay silent for what the host says
-  function hears() {
-    return readAloud;
-  }
-
   function reportAloud() {
-    if (online && socket && socket.readyState === 1) socket.send(JSON.stringify({ type: "aloud", on: hears() }));
+    if (online) tell({ type: "aloud", on: readAloud && !!myLanguage, id: myId });
   }
 
   function setAloud(on) {
@@ -186,6 +261,18 @@
     reportAloud();
   }
 
+  function post(path, body) {
+    var request = new XMLHttpRequest();
+    request.open("POST", base + path + "?lang=" + encodeURIComponent(myLanguage) + "&id=" + encodeURIComponent(myId) + "&name=" + encodeURIComponent(myName));
+    request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
+    request.send(body);
+  }
+
+  function hearAgain(key) {
+    if (!readAloud) setAloud(true);
+    if (online) tell({ type: "replay", key: key, lang: myLanguage }); else post("/replay", key);
+  }
+
   function waiting(value) {
     var row = document.createElement("div");
     row.dir = "auto";
@@ -198,15 +285,11 @@
 
   function sendText() {
     var value = text.value.replace(/\s+/g, " ").trim();
-    if (!value) return;
+    if (!value || !myLanguage) return;
     if (online) {
-      if (!socket || socket.readyState !== 1) return;
-      socket.send(JSON.stringify({ type: "say", text: value }));
+      if (!tell({ type: "say", text: value, lang: myLanguage, id: myId, name: myName })) return;
     } else {
-      var request = new XMLHttpRequest();
-      request.open("POST", base + "/say");
-      request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
-      request.send(value);
+      post("/say", value);
     }
     text.value = "";
     waiting(value);
@@ -220,13 +303,19 @@
     var length = Math.floor(input.length / ratio);
     var output = new Int16Array(length);
     for (var i = 0; i < length; i++) {
-      var start = Math.floor(i * ratio), end = Math.min(input.length, Math.floor((i + 1) * ratio));
+      var from = Math.floor(i * ratio), to = Math.min(input.length, Math.floor((i + 1) * ratio));
       var sum = 0;
-      for (var j = start; j < end; j++) sum += input[j];
-      var value = sum / Math.max(1, end - start);
+      for (var j = from; j < to; j++) sum += input[j];
+      var value = sum / Math.max(1, to - from);
       output[i] = Math.max(-1, Math.min(1, value)) * 32767;
     }
     return output;
+  }
+
+  function encode(samples) {
+    var bytes = new Uint8Array(samples.buffer), binary = "";
+    for (var i = 0; i < bytes.length; i += 4096) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 4096));
+    return btoa(binary);
   }
 
   function prepareMicrophone(done) {
@@ -240,10 +329,10 @@
       var silent = audio.createGain();
       silent.gain.value = 0;
       processor.onaudioprocess = function (event) {
-        if (!talking || !socket || socket.readyState !== 1) return;
+        if (!talking) return;
         var samples = downsample(event.inputBuffer.getChannelData(0), audio.sampleRate);
         sentSamples += samples.length;
-        socket.send(samples.buffer);
+        tell({ type: "pcm", id: myId, d: encode(samples) });
       };
       source.connect(processor);
       processor.connect(silent);
@@ -254,7 +343,7 @@
 
   function startTalking(event) {
     event.preventDefault();
-    if (talking || !socket || socket.readyState !== 1) return;
+    if (talking || !myLanguage || !socket || socket.readyState !== 1) return;
     prepareMicrophone(function () {
       if (audio.state === "suspended") audio.resume();
       queue = []; player.pause(); playing = false;
@@ -270,22 +359,35 @@
     talking = false;
     clearTimeout(talkTimer);
     mic.className = "";
-    if (socket && socket.readyState === 1) socket.send(JSON.stringify({ type: "audio_end" }));
+    tell({ type: "audio_end", id: myId, lang: myLanguage, name: myName });
     if (sentSamples > 4800) waiting(null);
   }
 
+  function choose(index) {
+    var language = languages[index];
+    if (!language || !language.c) return;
+    myLanguage = language.c;
+    myName = nameInput.value.replace(/\s+/g, " ").trim().slice(0, 30);
+    languageButton.textContent = language.n;
+    languageButton.style.display = "block";
+    start.style.display = "none";
+    // everything already said is shown again in the chosen language
+    list.innerHTML = "";
+    rows = {};
+    pending = [];
+    for (var i = 0; i < order.length; i++) show(all[order[i]]);
+    applyLabels();
+    setAloud(true);   // the tap on the language is also the tap browsers need before they play sound
+  }
+
+  element("languageA").addEventListener("click", function () { choose(0); });
+  element("languageB").addEventListener("click", function () { choose(1); });
+  languageButton.addEventListener("click", function () { start.style.display = "flex"; });
   send.addEventListener("click", sendText);
   text.addEventListener("keydown", function (event) {
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendText(); }
   });
   aloud.addEventListener("click", function () { setAloud(!readAloud); });
-  // one tap is needed before a browser may play sound: we ask for it as soon as the page opens
-  var start = document.getElementById("start");
-  start.style.display = "flex";
-  start.addEventListener("click", function () {
-    start.style.display = "none";
-    setAloud(true);
-  });
   setInterval(reportAloud, 5000);
   if (online) {
     hint.textContent = "Hold the microphone to speak";

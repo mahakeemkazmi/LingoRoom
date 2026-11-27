@@ -16,6 +16,7 @@
 
 package nie.translator.rtranslator.tools.gui.messages;
 
+import nie.translator.rtranslator.voice_translation.guest.GuestSession;
 import android.annotation.SuppressLint;
 import android.app.Application;
 import android.content.Context;
@@ -298,13 +299,23 @@ public class MessagesAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         public void bind(GuiMessage message, long playingMessageID, View.OnClickListener playListener){
             this.message = message;
             // Bind message text
-            setText(message.getMessage().getTextToTranslate(), message.getMessage().getText());
+            String original = message.getMessage().getTextToTranslate();
+            // with a guest link each phone shows only the language of its owner: what we said as we said it,
+            // and what the guest said translated for us
+            boolean ownLanguageOnly = GuestSession.isActive() && original != null && !original.isEmpty();
+            if (ownLanguageOnly) {
+                originalTextToBeTranslated.setVisibility(View.GONE);
+                text.setText(message.isMine() ? original : message.getMessage().getText());
+            } else {
+                originalTextToBeTranslated.setVisibility(showOriginalTranscriptionMsg ? View.VISIBLE : View.GONE);
+                setText(original, message.getMessage().getText());
+            }
             // Bind tts button status and listener
             setIsPlayingTTS(message.getMessageID() == playingMessageID);
             ttsButton.setOnClickListener(playListener);
             // insert language infos in the views for accessibility
             GuiTools.setTextLanguageInfoForAccessibility(originalTextToBeTranslated, message.getSourceLanguage());
-            GuiTools.setTextLanguageInfoForAccessibility(text, message.getContentLanguage());
+            GuiTools.setTextLanguageInfoForAccessibility(text, ownLanguageOnly && message.isMine() ? message.getSourceLanguage() : message.getContentLanguage());
         }
 
         private void setText(String originalTextToBeTranslated, String text){

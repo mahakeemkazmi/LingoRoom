@@ -28,29 +28,33 @@ import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 
 import nie.translator.rtranslator.R;
 
 /**
- * The guest conversation that is currently open, if any. The Conversation screen starts it,
- * the Conversation service feeds it and receives the texts written by the guest.
+ * The room that is currently open, if any: a conversation that guests follow in the browser of their own
+ * phones, each in the language they chose. The Conversation screen opens it, the Conversation service feeds it
+ * and receives what the guests write and say.
  */
 public final class GuestSession {
-    /** Texts of the guest page. The service translates them into the language of the guest. */
+    /** Texts of the guest page. The service translates them into the languages of the room. */
     public static final String[] LABELS = {
             "Write your message here",
             "Send",
             "Read aloud",
             "To speak, tap the box below, then the microphone on your keyboard",
             "Hold the microphone to speak",
-            "Tap here to hear the conversation"
+            "Tap here to hear the conversation",
+            "Your name",
+            "Choose your language"
     };
 
     public interface Host {
-        void onGuestText(String text);
+        void onGuestText(String text, String language, String id, String name);
 
         /** @param samples what the guest said, mono, 16 kHz */
-        void onGuestAudio(float[] samples);
+        void onGuestAudio(float[] samples, String language, String id, String name);
 
         void onGuestSessionStarted();
     }
@@ -61,7 +65,8 @@ public final class GuestSession {
     private static String relayRoom;
     private static GuestVoice voice;
     private static int soundCounter;
-    private static volatile String speechLanguage = "";
+    private static volatile boolean sameRoom = true;
+    private static final ConcurrentHashMap<String, String[]> soundInfo = new ConcurrentHashMap<>();   // language and speaker of the sounds being made
     private static Host host;
 
     private GuestSession() {
@@ -95,12 +100,31 @@ public final class GuestSession {
         return builder.toString();
     }
 
+    private static Host currentHost() {
+        synchronized (GuestSession.class) {
+            return host;
+        }
+    }
+
     private static void ensureServer(Context context) throws Exception {
         if (server != null) {
             return;
         }
         final GuestServer created = new GuestServer(readPage(context), LABELS);
-        created.setTextListener(GuestSession::deliverText);
+        created.setGuestListener(new GuestServer.GuestListener() {
+            @Override
+            public void onGuestText(String text, String language, String id, String name) {
+                Host current = currentHost();
+                if (current != null) {
+                    current.onGuestText(text, language, id, name);
+                }
+            }
+
+            @Override
+            public void onGuestReplay(String key, String language) {
+                replay(key, language);
+            }
+        });
         created.setChangeListener(() -> {
             RelayClient current = relay;
             if (current != null && current.isOpen()) {
@@ -110,12 +134,16 @@ public final class GuestSession {
             }
         });
         server = created;
-        voice = new GuestVoice(context, (key, wav) -> {
-            created.addSound(key, wav);
+        voice = new GuestVoice(context, (name, wav) -> {
+            String[] info = soundInfo.remove(name);
+            String language = info == null ? "" : info[0];
+            String from = info == null ? "" : info[1];
+            created.addSound(name, wav, language, from);
             RelayClient current = relay;
             if (current != null && current.isOpen()) {
-                // over the internet the sound travels with the conversation: first its name, then the sound itself
-                current.send("{\"type\":\"audio\",\"key\":" + GuestServer.quote(key) + "}");
+                // over the internet the sound travels with the conversation: first its description, then the sound itself
+                current.send("{\"type\":\"audio\",\"key\":" + GuestServer.quote(name) + ",\"lang\":" + GuestServer.quote(language)
+                        + ",\"from\":" + GuestServer.quote(from) + "}");
                 current.send(wav);
             }
         });
@@ -124,18 +152,8 @@ public final class GuestSession {
         }
     }
 
-    private static void deliverText(String text) {
-        Host current;
-        synchronized (GuestSession.class) {
-            current = host;
-        }
-        if (current != null) {
-            current.onGuestText(text);
-        }
-    }
-
     /**
-     * Opens the guest conversation over the internet, through the guest relay.
+     * Opens the room over the internet, through the guest relay.
      *
      * @return the address of the guest page, or null if this build has no relay
      */
@@ -145,8 +163,12 @@ public final class GuestSession {
         if (address.isEmpty()) {
             return null;
         }
+        boolean isNew = server == null;
         ensureServer(context);
         if (relay == null) {
+            if (isNew) {
+                sameRoom = false;   // guests who join by link are usually somewhere else
+            }
             relayRoom = randomHex(16);
             final GuestServer current = server;
             relay = new RelayClient("wss://" + address.substring(8) + "/r/" + relayRoom + "/ws?role=host&key=" + randomHex(16), new RelayClient.Listener() {
@@ -160,18 +182,23 @@ public final class GuestSession {
                 }
 
                 @Override
-                public void onGuestText(String text) {
-                    deliverText(text);
+                public void onGuestText(String text, String language, String id, String name) {
+                    Host target = currentHost();
+                    if (target != null) {
+                        target.onGuestText(text, language, id, name);
+                    }
                 }
 
                 @Override
-                public void onGuestAudio(float[] samples) {
-                    Host target;
-                    synchronized (GuestSession.class) {
-                        target = host;
-                    }
+                public void onGuestReplay(String key, String language) {
+                    replay(key, language);
+                }
+
+                @Override
+                public void onGuestAudio(float[] samples, String language, String id, String name) {
+                    Host target = currentHost();
                     if (target != null) {
-                        target.onGuestAudio(samples);
+                        target.onGuestAudio(samples, language, id, name);
                     }
                 }
             });
@@ -181,7 +208,7 @@ public final class GuestSession {
     }
 
     /**
-     * Opens the guest conversation on the local network, with no internet.
+     * Opens the room on the local network, with no internet.
      *
      * @return the address of the guest page, or null if the phone is not on a Wi-Fi or hotspot
      */
@@ -191,7 +218,11 @@ public final class GuestSession {
         if (address == null) {
             return null;
         }
+        boolean isNew = server == null;
         ensureServer(context);
+        if (isNew) {
+            sameRoom = true;   // guests on the same Wi-Fi are usually in the same room
+        }
         if (!server.isRunning()) {
             server.start();
         }
@@ -211,6 +242,7 @@ public final class GuestSession {
             voice.shutdown();
             voice = null;
         }
+        soundInfo.clear();
         GuestHotspot.stop();
     }
 
@@ -219,7 +251,19 @@ public final class GuestSession {
     }
 
     /**
-     * @return true if the phone of a guest is reading the conversation aloud: this phone then does not need
+     * @return true if the guests are in the same room as this phone (or their voices reach it through a loudspeaker):
+     * they hear its user directly and its mic hears them
+     */
+    public static boolean isSameRoom() {
+        return sameRoom;
+    }
+
+    public static void setSameRoom(boolean value) {
+        sameRoom = value;
+    }
+
+    /**
+     * @return true if the phone of a guest is playing the conversation aloud: this phone then does not need
      * to speak the translation of what its own user says
      */
     public static boolean isGuestListening() {
@@ -233,39 +277,56 @@ public final class GuestSession {
     }
 
     /**
-     * @return true if a guest who joined over the internet is listening. That guest is somewhere else, so the
-     * mic of this phone only ever hears its own user.
+     * @return true if guests who are somewhere else are listening. The mic of this phone then only ever hears its own user.
      */
     public static boolean isRemoteGuestListening() {
         RelayClient currentRelay = relay;
-        return currentRelay != null && currentRelay.isGuestListening();
+        return !sameRoom && currentRelay != null && currentRelay.isGuestListening();
     }
 
-    public static synchronized void publish(String key, boolean hostSpoke, String original, String translated, boolean isFinal) {
+    /**
+     * @param from who said it: GuestServer.HOST_ID or the id of a guest
+     */
+    public static synchronized void publish(String key, String from, String name, String original, String originalLanguage, String translated, String translatedLanguage, boolean isFinal) {
         if (server != null) {
-            server.publish(key, hostSpoke, original, translated, isFinal);
+            server.publish(key, from, name, original, originalLanguage, translated, translatedLanguage, isFinal);
         }
     }
 
     /**
-     * Makes the phone of the guest say a phrase. Phrases are heard in the order of the calls.
+     * Makes the phones of the guests who chose a language say a phrase. Phrases are heard in the order of the calls.
+     *
+     * @param from who said it (that person does not hear it again)
      */
-    public static synchronized void speak(String phrase) {
-        if (voice != null && !speechLanguage.isEmpty()) {
-            voice.synthesize("s" + (soundCounter++), phrase, speechLanguage);
+    public static synchronized void speak(String phrase, String language, String from) {
+        if (voice != null && language != null && !language.isEmpty()) {
+            String name = "s" + (soundCounter++);
+            soundInfo.put(name, new String[]{language, from == null ? "" : from});
+            voice.synthesize(name, phrase, language);
         }
     }
 
-    public static synchronized void setSpeechLanguage(String languageCode) {
-        speechLanguage = languageCode == null ? "" : languageCode;
-        if (server != null) {
-            server.setSpeechLanguage(languageCode);
+    /** A guest tapped a message to hear it again. */
+    private static synchronized void replay(String key, String language) {
+        if (server != null && key != null) {
+            String text = server.getText(key, language);
+            if (text != null && !text.isEmpty()) {
+                speak(text, language, "");
+            }
         }
     }
 
-    public static synchronized void setLabel(int index, String text) {
+    /** Sets the two languages the guests can choose from. */
+    public static synchronized void setLanguages(String firstCode, String firstName, String secondCode, String secondName) {
         if (server != null) {
-            server.setLabel(index, text);
+            server.clearLabels();
+            server.setLanguages(firstCode, firstName, secondCode, secondName);
+        }
+    }
+
+    public static synchronized void setLabel(String language, int index, String text) {
+        if (server != null) {
+            server.setLabel(language, index, text);
         }
     }
 

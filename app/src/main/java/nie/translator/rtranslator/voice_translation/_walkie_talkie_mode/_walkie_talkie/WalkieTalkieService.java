@@ -27,7 +27,9 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 
 import nie.translator.rtranslator.Global;
@@ -40,6 +42,7 @@ import nie.translator.rtranslator.tools.Tools;
 import nie.translator.rtranslator.tools.gui.messages.GuiMessage;
 import nie.translator.rtranslator.voice_translation.SpokenLanguagePicker;
 import nie.translator.rtranslator.voice_translation.guest.EchoGuard;
+import nie.translator.rtranslator.voice_translation.guest.GuestServer;
 import nie.translator.rtranslator.voice_translation.guest.GuestSession;
 import nie.translator.rtranslator.voice_translation.history.ConversationHistoryStore;
 import nie.translator.rtranslator.voice_translation.StreamingSpeechChunker;
@@ -88,7 +91,6 @@ public class WalkieTalkieService extends VoiceTranslationService {
     private final long conversationStartedAt = System.currentTimeMillis();
     private final EchoGuard guestEchoGuard = new EchoGuard();
     private boolean textFromGuestLink = false;   // true while we handle a text that came through the guest link, not through our mic
-    private boolean remoteHostRecognizing = false;   // true while we recognize our own user during a translated call by link
     private boolean guestRecognizing = false;   // true while we recognize what a guest said through the guest link
     private volatile double firstLanguageAudioProbability = -1;   // from the last automatic recognition, -1 if unknown
     // streaming speech (the translation is spoken phrase by phrase while it is generated)
@@ -146,12 +148,19 @@ public class WalkieTalkieService extends VoiceTranslationService {
                                 CustomLocale newFirstLanguage = (CustomLocale) message.getData().getSerializable("language");
                                 if (!firstLanguage.equals(newFirstLanguage)) {
                                     firstLanguage = newFirstLanguage;
+                                    if (GuestSession.isActive()) {
+                                        guestHost.onGuestSessionStarted();
+                                    }
                                 }
                                 break;
                             case CHANGE_SECOND_LANGUAGE:
                                 CustomLocale newSecondLanguage = (CustomLocale) message.getData().getSerializable("language");
                                 if (!secondLanguage.equals(newSecondLanguage)) {
                                     secondLanguage = newSecondLanguage;
+                                    if (GuestSession.isActive()) {
+                                        // the room follows the new language: page texts, voices and the next sentences
+                                        guestHost.onGuestSessionStarted();
+                                    }
                                 }
                                 break;
                             case GET_FIRST_LANGUAGE:
@@ -177,8 +186,10 @@ public class WalkieTalkieService extends VoiceTranslationService {
                                         public void onDetectedText(final NeuralNetworkApiResult result) {
                                             // here the result returns with the same language as the text sent from the Fragment editText
                                             if (result.getLanguage().equalsLanguage(firstLanguage)) {
+                                                expectSpeaker(HOST_SPEAKER);
                                                 translator.translate(result.getText(), firstLanguage, secondLanguage, TRANSLATOR_BEAM_SIZE, false, Global.RTranslatorMode.WALKIE_TALKIE_MODE, firstResultTranslateListener);
                                             } else {
+                                                expectSpeaker(HOST_SPEAKER);
                                                 translator.translate(result.getText(), secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, Global.RTranslatorMode.WALKIE_TALKIE_MODE, secondResultTranslateListener);
                                             }
                                         }
@@ -288,8 +299,8 @@ public class WalkieTalkieService extends VoiceTranslationService {
 
                 }else if(isMicAutomatic) {
                     if (GuestSession.isRemoteGuestListening()) {
-                        // the guest is somewhere else (translated call by link): our mic only hears the first language
-                        remoteHostRecognizing = true;
+                        // the guests are somewhere else: our mic only hears our own user, in the first language
+                        pendingSingleRecognitions.add(new Object[]{null, Boolean.TRUE});
                         speechRecognizer.recognize(data, SPEECH_BEAM_SIZE, firstLanguage.getCode());
                     } else {
                         // we start the speech recognition in both languages
@@ -344,28 +355,31 @@ public class WalkieTalkieService extends VoiceTranslationService {
         speechRecognizerSingleCallback = new RecognizerListener() {
             @Override
             public void onSpeechRecognizedResult(String text, String languageCode, double confidenceScore, boolean isFinal) {
-                if (remoteHostRecognizing && !manualRecognizingFirstLanguage && !manualRecognizingSecondLanguage
-                        && (!guestRecognizing || (languageCode != null && firstLanguage != null && languageCode.equals(firstLanguage.getCode())))) {
-                    // what our own user said during a translated call by link
-                    remoteHostRecognizing = false;
-                    if (text == null || text.trim().isEmpty()) {
-                        startVoiceRecorder();
-                        notifyMicActivated();
-                    } else {
-                        translate(text, firstLanguage, secondLanguage, TRANSLATOR_BEAM_SIZE, false, firstResultTranslateListener);
+                if (!manualRecognizingFirstLanguage && !manualRecognizingSecondLanguage && !pendingSingleRecognitions.isEmpty()) {
+                    // a recognition we asked for in one language: our own user in a room with guests somewhere else, or a guest
+                    Object[] request = pendingSingleRecognitions.poll();
+                    String[] guest = (String[]) request[0];
+                    boolean fromFirstLanguage = request[1] == Boolean.TRUE;
+                    if (guest != null) {
+                        guestRecognizing = false;
                     }
-                    return;
-                }
-                if (guestRecognizing && !manualRecognizingFirstLanguage && !manualRecognizingSecondLanguage) {
-                    // what a guest said through the guest link
-                    guestRecognizing = false;
-                    if (text == null || text.trim().isEmpty()) {
+                    if (text == null || text.trim().isEmpty() || firstLanguage == null || secondLanguage == null) {
                         startVoiceRecorder();
                         notifyMicActivated();
                     } else {
-                        textFromGuestLink = true;
-                        translate(text, secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
+                        if (guest != null) {
+                            textFromGuestLink = true;
+                            currentGuestSpeaker = guest;
+                        }
+                        if (fromFirstLanguage) {
+                            translate(text, firstLanguage, secondLanguage, TRANSLATOR_BEAM_SIZE, false, firstResultTranslateListener);
+                        } else {
+                            translate(text, secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
+                        }
                         textFromGuestLink = false;
+                    }
+                    if (guest != null) {
+                        processNextGuestAudio();
                     }
                     return;
                 }
@@ -380,9 +394,17 @@ public class WalkieTalkieService extends VoiceTranslationService {
 
             @Override
             public void onError(int[] reasons, long value) {
-                boolean wasGuest = guestRecognizing || remoteHostRecognizing;
-                guestRecognizing = false;
-                remoteHostRecognizing = false;
+                Object[] request = manualRecognizingFirstLanguage || manualRecognizingSecondLanguage ? null : pendingSingleRecognitions.poll();
+                boolean wasGuest = request != null;
+                if (request != null && request[0] != null) {
+                    guestRecognizing = false;
+                    mainHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            processNextGuestAudio();
+                        }
+                    });
+                }
                 manualRecognizingFirstLanguage = false;
                 manualRecognizingSecondLanguage = false;
                 if (wasGuest) {
@@ -398,7 +420,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onSuccess(ArrayList<CustomLocale> ttsLanguages) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, true, isFinal);
-                        GuestSession.publish("a" + resultID, true, textToTranslate, translatedText, isFinal);
+                        publishToGuests(true, resultID, textToTranslate, translatedText, isFinal);
                         if (isFinal && GuestSession.isActive()) {
                             guestEchoGuard.remember(translatedText, System.currentTimeMillis());
                         }
@@ -418,7 +440,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onFailure(int[] reasons, long value) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, true, isFinal);
-                        GuestSession.publish("a" + resultID, true, textToTranslate, translatedText, isFinal);
+                        publishToGuests(true, resultID, textToTranslate, translatedText, isFinal);
                         if (isFinal && GuestSession.isActive()) {
                             guestEchoGuard.remember(translatedText, System.currentTimeMillis());
                         }
@@ -434,6 +456,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
 
             @Override
             public void onFailure(int[] reasons, long value) {
+                pendingSpeakers.poll();
                 WalkieTalkieService.super.notifyError(reasons,value);
                 //if the tts is not active (or a streamed speech was cut short and has nothing left to say) we restart the mic here
                 boolean streamNeedsMicRestart = abortSpeechStream();
@@ -450,7 +473,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onSuccess(ArrayList<CustomLocale> ttsLanguages) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), inputLanguage, outputLanguage, resultID, false, isFinal);
-                        GuestSession.publish("b" + resultID, false, textToTranslate, translatedText, isFinal);
+                        publishToGuests(false, resultID, textToTranslate, translatedText, isFinal);
                         // we speak the translation phrase by phrase while it is still being generated
                         boolean canSpeak = CustomLocale.containsLanguage(ttsLanguages, outputLanguage);
                         boolean restartMic = speakStreaming(textToTranslate, translatedText, resultID, false, isFinal, inputLanguage, outputLanguage, canSpeak);
@@ -467,7 +490,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                     @Override
                     public void onFailure(int[] reasons, long value) {
                         GuiMessage message = new GuiMessage(new Message(textToTranslate, WalkieTalkieService.this, translatedText), firstLanguage, outputLanguage, resultID, false, isFinal);
-                        GuestSession.publish("b" + resultID, false, textToTranslate, translatedText, isFinal);
+                        publishToGuests(false, resultID, textToTranslate, translatedText, isFinal);
                         WalkieTalkieService.super.notifyMessage(message);
                         // we save every new message in the exchanged messages so that the fragment can restore them
                         WalkieTalkieService.super.addOrUpdateMessage(message);
@@ -480,6 +503,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
 
             @Override
             public void onFailure(int[] reasons, long value) {
+                pendingSpeakers.poll();
                 WalkieTalkieService.super.notifyError(reasons,value);
                 //if the tts is not active (or a streamed speech was cut short and has nothing left to say) we restart the mic here
                 boolean streamNeedsMicRestart = abortSpeechStream();
@@ -507,7 +531,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
                 if (isFinal || isStreamingSpeechEnabled()) {
                     String guestChunk = speechChunker.nextChunk(resultID, translatedText, isFinal);
                     if (guestChunk != null) {
-                        GuestSession.speak(guestChunk);
+                        GuestSession.speak(guestChunk, outputLanguage.getCode(), speakerId("a" + resultID));
                     }
                 }
                 if (isFinal) {
@@ -535,6 +559,10 @@ public class WalkieTalkieService extends VoiceTranslationService {
                 mainHandler.removeCallbacks(speechStreamTimeout);
             }
             String chunk = speechChunker.nextChunk(resultID, translatedText, isFinal);
+            if (chunk != null && !isMine && !GuestSession.isSameRoom() && GuestSession.isGuestListening()) {
+                // guests somewhere else who chose the first language hear it on their own phones
+                GuestSession.speak(chunk, outputLanguage.getCode(), speakerId("b" + resultID));
+            }
             if (chunk != null) {
                 if (!isFinal) {
                     speechStreamPending = true;
@@ -598,40 +626,97 @@ public class WalkieTalkieService extends VoiceTranslationService {
         }
     }
 
+    // who said each message of a room. Translations come back in the order they were asked for.
+    private static final String[] HOST_SPEAKER = {GuestServer.HOST_ID, ""};
+    private final ArrayDeque<String[]> pendingSpeakers = new ArrayDeque<>();
+    private final HashMap<String, String[]> speakers = new HashMap<>();
+    private String[] currentGuestSpeaker = null;
+    // recognitions asked in one language: {the guest who spoke or null for our own user, TRUE if it is the first language}
+    private final ArrayDeque<Object[]> pendingSingleRecognitions = new ArrayDeque<>();
+    // what guests said while another guest was being recognized: {samples, language code, guest}
+    private final ArrayDeque<Object[]> waitingGuestAudio = new ArrayDeque<>();
+
+    private void expectSpeaker(String[] speaker) {
+        if (!GuestSession.isActive()) {
+            pendingSpeakers.clear();
+            return;
+        }
+        if (pendingSpeakers.size() > 50) {
+            pendingSpeakers.clear();
+        }
+        pendingSpeakers.add(speaker);
+    }
+
+    private String speakerId(String key) {
+        String[] speaker = speakers.get(key);
+        return speaker == null ? GuestServer.HOST_ID : speaker[0];
+    }
+
     /**
-     * The guest of a guest conversation (a person who follows the conversation in a browser, without the app)
-     * always uses the second language.
+     * Shows a message (or its growing translation) to the guests of the room.
+     * @param firstToSecond true if it was said in the first language
+     */
+    private void publishToGuests(boolean firstToSecond, long resultID, String original, String translated, boolean isFinal) {
+        if (!GuestSession.isActive() || firstLanguage == null || secondLanguage == null) {
+            return;
+        }
+        String key = (firstToSecond ? "a" : "b") + resultID;
+        String[] speaker = speakers.get(key);
+        boolean isNew = speaker == null;
+        if (isNew) {
+            speaker = pendingSpeakers.poll();
+            if (speaker == null) {
+                speaker = HOST_SPEAKER;
+            }
+            if (speakers.size() > 400) {
+                speakers.clear();
+            }
+            speakers.put(key, speaker);
+        }
+        String originalLanguage = (firstToSecond ? firstLanguage : secondLanguage).getCode();
+        String translatedLanguage = (firstToSecond ? secondLanguage : firstLanguage).getCode();
+        GuestSession.publish(key, speaker[0], speaker[1], original, originalLanguage, translated, translatedLanguage, isFinal);
+        if (isNew && !GuestSession.isSameRoom() && GuestSession.isGuestListening()) {
+            // guests somewhere else who chose the language of the speaker did not hear the speaker: their phones say it
+            GuestSession.speak(original, originalLanguage, speaker[0]);
+        }
+    }
+
+    /**
+     * Guests follow the conversation in a browser, each in one of the two languages, and can write or speak.
      */
     private final GuestSession.Host guestHost = new GuestSession.Host() {
         @Override
-        public void onGuestText(final String text) {
+        public void onGuestText(final String text, final String language, final String id, final String name) {
             mainHandler.post(new Runnable() {
                 @Override
                 public void run() {
                     if (firstLanguage == null || secondLanguage == null) {
                         return;
                     }
-                    // the translation will be spoken by this phone, so the mic stays off until then (as after a spoken phrase)
+                    // the translation may be spoken by this phone, so the mic stays off until then (as after a spoken phrase)
                     stopVoiceRecorder();
                     textFromGuestLink = true;
-                    translate(text, secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
+                    currentGuestSpeaker = new String[]{id, name};
+                    if (firstLanguage.getCode().equals(language)) {
+                        translate(text, firstLanguage, secondLanguage, TRANSLATOR_BEAM_SIZE, false, firstResultTranslateListener);
+                    } else {
+                        translate(text, secondLanguage, firstLanguage, TRANSLATOR_BEAM_SIZE, false, secondResultTranslateListener);
+                    }
                     textFromGuestLink = false;
                 }
             });
         }
 
         @Override
-        public void onGuestAudio(final float[] samples) {
+        public void onGuestAudio(final float[] samples, final String language, final String id, final String name) {
             mainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    if (firstLanguage == null || secondLanguage == null || speechRecognizer == null) {
-                        return;
+                    if (waitingGuestAudio.size() < 20) {
+                        waitingGuestAudio.add(new Object[]{samples, language, new String[]{id, name}});
                     }
-                    // the guest always speaks the second language, so we recognize only that one
-                    stopVoiceRecorder();
-                    guestRecognizing = true;
-                    speechRecognizer.recognize(samples, SPEECH_BEAM_SIZE, secondLanguage.getCode());
+                    processNextGuestAudio();
                 }
             });
         }
@@ -641,32 +726,51 @@ public class WalkieTalkieService extends VoiceTranslationService {
             mainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    if (secondLanguage == null) {
+                    if (firstLanguage == null || secondLanguage == null) {
                         return;
                     }
-                    GuestSession.setSpeechLanguage(secondLanguage.getCode());
-                    if (!"en".equals(secondLanguage.getCode())) {
-                        translateGuestLabel(0);
-                    }
+                    GuestSession.setLanguages(firstLanguage.getCode(), firstLanguage.getDisplayNameWithoutTTS(), secondLanguage.getCode(), secondLanguage.getDisplayNameWithoutTTS());
+                    translateGuestLabel(secondLanguage, 0, firstLanguage);
                 }
             });
         }
     };
 
     /**
-     * Translates the few texts of the guest page into the language of the guest, one after the other.
+     * Recognizes what the next waiting guest said, one guest at a time.
      */
-    private void translateGuestLabel(final int index) {
-        if (index >= GuestSession.LABELS.length || translator == null || secondLanguage == null) {
+    private void processNextGuestAudio() {
+        if (guestRecognizing || waitingGuestAudio.isEmpty() || firstLanguage == null || secondLanguage == null || speechRecognizer == null) {
+            return;
+        }
+        Object[] next = waitingGuestAudio.poll();
+        boolean fromFirstLanguage = firstLanguage.getCode().equals(next[1]);
+        stopVoiceRecorder();
+        guestRecognizing = true;
+        pendingSingleRecognitions.add(new Object[]{next[2], fromFirstLanguage ? Boolean.TRUE : Boolean.FALSE});
+        speechRecognizer.recognize((float[]) next[0], SPEECH_BEAM_SIZE, (fromFirstLanguage ? firstLanguage : secondLanguage).getCode());
+    }
+
+    /**
+     * Translates the few texts of the guest page into a language of the room, one after the other, then does the next language.
+     */
+    private void translateGuestLabel(final CustomLocale language, final int index, final CustomLocale nextLanguage) {
+        if (language == null || translator == null) {
+            return;
+        }
+        if ("en".equals(language.getCode()) || index >= GuestSession.LABELS.length) {
+            if (nextLanguage != null) {
+                translateGuestLabel(nextLanguage, 0, null);
+            }
             return;
         }
         try {
-            translator.translate(GuestSession.LABELS[index], new CustomLocale("en"), secondLanguage, TRANSLATOR_BEAM_SIZE, false, Global.RTranslatorMode.WALKIE_TALKIE_MODE, new Translator.TranslateListener() {
+            translator.translate(GuestSession.LABELS[index], new CustomLocale("en"), language, TRANSLATOR_BEAM_SIZE, false, Global.RTranslatorMode.WALKIE_TALKIE_MODE, new Translator.TranslateListener() {
                 @Override
                 public void onTranslatedText(String textToTranslate, String translatedText, String[] synonyms, long resultID, boolean isFinal, ResultType resultType, CustomLocale inputLanguage, CustomLocale outputLanguage) {
                     if (isFinal) {
-                        GuestSession.setLabel(index, translatedText);
-                        translateGuestLabel(index + 1);
+                        GuestSession.setLabel(language.getCode(), index, translatedText);
+                        translateGuestLabel(language, index + 1, nextLanguage);
                     }
                 }
 
@@ -823,6 +927,7 @@ public class WalkieTalkieService extends VoiceTranslationService {
             notifyMicActivated();
             return;
         }
+        expectSpeaker(textFromGuestLink && currentGuestSpeaker != null ? currentGuestSpeaker : HOST_SPEAKER);
         if(!isMetaText(textToTranslate)) {
             translator.translate(textToTranslate, languageInput, languageOutput, beamSize, saveResults, Global.RTranslatorMode.WALKIE_TALKIE_MODE, responseListener);
         }else{
