@@ -54,7 +54,9 @@ public class MyWordsPreference extends Preference {
         final SharedPreferences preferences = context.getApplicationContext().getSharedPreferences("default", Context.MODE_PRIVATE);
         final EditText input = new EditText(context);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
-        input.setMinLines(6);
+        input.setMinLines(5);
+        input.setMaxLines(9);   // the list scrolls inside the box, so the buttons stay on the screen
+        input.setVerticalScrollBarEnabled(true);
         input.setGravity(android.view.Gravity.TOP);
         input.setHint(R.string.my_words_hint);
         input.setText(preferences.getString(MyWords.PREFERENCE_WORDS, ""));

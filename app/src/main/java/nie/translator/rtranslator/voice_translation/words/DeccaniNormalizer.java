@@ -19,113 +19,253 @@ package nie.translator.rtranslator.voice_translation.words;
 import java.util.HashMap;
 
 /**
- * Deccani (Hyderabadi) Urdu uses words and verb forms that standard Urdu and Hindi do not have, so the translator
- * does not understand them. This replaces the most common ones with their standard form before translation.
- * Only forms that are not ordinary words of the standard language are replaced. Pure Java.
+ * Deccani (Hyderabadi) Urdu uses words, phrases and verb forms that standard Urdu and Hindi do not have, so the
+ * translator does not understand them. This replaces them with a standard form before translation.
+ * Only forms that are not ordinary words of the standard language are in the dictionary: "bheja" (also "sent"),
+ * "dhakkan" (also a lid) or "baigan" alone (also an eggplant) are left to the translator. Pure Java.
+ * The texts are written as unicode escapes so the file survives any editor; each pair is a Deccani form and its
+ * standard form, first in Devanagari, then in Urdu script.
  */
 public final class DeccaniNormalizer {
+    private static final int MAX_PHRASE_WORDS = 4;
     private static final HashMap<String, String> WORDS = new HashMap<>();
+    // the same dictionary by the "sound" of the form (see WordMatcher.key), for longer forms that are heard with small differences
+    private static final HashMap<String, String> SOUNDS = new HashMap<>();
     // verbs that Deccani joins with the "ra / ri / re" of the continuous tense: "karra" for "kar raha"
-    private static final String[] HINDI_STEMS = {"कर", "बोल", "जा", "आ", "दे", "ले", "देख", "सुन", "हो", "बैठ", "चल", "पूछ", "सोच", "बता", "समझ", "रह", "मिल", "लग", "पढ़", "लिख", "खेल", "सो", "पी", "निकल", "पहुँच", "बना", "रुक", "भेज", "ला"};
-    private static final String[] URDU_STEMS = {"کر", "بول", "دے", "لے", "دیکھ", "سن", "ہو", "بیٹھ", "چل", "پوچھ", "سوچ", "بتا", "سمجھ", "رہ", "مل", "لگ", "پڑھ", "لکھ", "کھیل", "سو", "پی", "نکل", "پہنچ", "بنا", "رک", "بھیج", "لا"};
+    private static final String[] HINDI_STEMS = {"\u0915\u0930", "\u092C\u094B\u0932", "\u091C\u093E", "\u0906", "\u0926\u0947", "\u0932\u0947", "\u0926\u0947\u0916", "\u0938\u0941\u0928", "\u0939\u094B", "\u092C\u0948\u0920", "\u091A\u0932", "\u092A\u0942\u091B", "\u0938\u094B\u091A", "\u092C\u0924\u093E", "\u0938\u092E\u091D", "\u0930\u0939", "\u092E\u093F\u0932", "\u0932\u0917", "\u092A\u0922\u093C", "\u0932\u093F\u0916", "\u0916\u0947\u0932", "\u0938\u094B", "\u092A\u0940", "\u0928\u093F\u0915\u0932", "\u092C\u0928\u093E", "\u0930\u0941\u0915", "\u092D\u0947\u091C", "\u0932\u093E"};
+    private static final String[] URDU_STEMS = {"\u06A9\u0631", "\u0628\u0648\u0644", "\u062F\u06D2", "\u0644\u06D2", "\u062F\u06CC\u06A9\u06BE", "\u0633\u0646", "\u06C1\u0648", "\u0628\u06CC\u0679\u06BE", "\u0686\u0644", "\u067E\u0648\u0686\u06BE", "\u0633\u0648\u0686", "\u0628\u062A\u0627", "\u0633\u0645\u062C\u06BE", "\u0631\u06C1", "\u0645\u0644", "\u0644\u06AF", "\u067E\u0691\u06BE", "\u0644\u06A9\u06BE", "\u06A9\u06BE\u06CC\u0644", "\u0633\u0648", "\u067E\u06CC", "\u0646\u06A9\u0644", "\u0628\u0646\u0627", "\u0631\u06A9", "\u0628\u06BE\u06CC\u062C", "\u0644\u0627"};
+    // joined forms that are ordinary words and must stay: jaari (ongoing), aari (a saw), aara, sorry, lorry, hori, savere...
+    private static final String[] ORDINARY = {"\u091C\u093E\u0930\u0940", "\u0906\u0930\u0940", "\u0906\u0930\u093E", "\u0938\u094B\u0930\u0940", "\u0932\u093E\u0930\u0940", "\u0939\u094B\u0930\u0940", "\u0938\u0648\u0631\u06D2", "\u0644\u0627\u0631\u06CC", "\u067E\u06CC\u0631\u06CC", "\u06C1\u0648\u0631\u06CC", "\u0633\u0648\u0631\u06CC"};
+
+    private static void add(String form, String standard) {
+        WORDS.put(form, standard);
+        String sound = WordMatcher.key(form);
+        if (sound.length() >= 5) {
+            SOUNDS.put(sound, standard);
+        }
+    }
 
     static {
         String[] pairs = {
-                // Devanagari
-                "नक्को", "नहीं", "नको", "नहीं", "नक्कू", "नहीं",
-                "काइकू", "क्यों", "कैकू", "क्यों", "कायकू", "क्यों", "काइको", "क्यों", "कायको", "क्यों", "कैको", "क्यों",
-                "मेरेकु", "मुझे", "मेरेकू", "मुझे", "मेरेको", "मुझे", "तेरेकु", "तुझे", "तेरेकू", "तुझे", "तेरेको", "तुझे",
-                "उनकु", "उनको", "उनकू", "उनको", "इनकु", "इनको", "इनकू", "इनको", "उसकु", "उसको", "उसकू", "उसको", "इसकु", "इसको", "इसकू", "इसको",
-                "अपनकु", "हमें", "अपनकू", "हमें", "अपनको", "हमें",
-                "हौ", "हाँ", "इच", "ही", "हल्लू", "धीरे", "हल्लु", "धीरे",
-                "पोट्टी", "लड़की", "पोट्टा", "लड़का", "पोट्टे", "लड़के",
-                "कित्ता", "कितना", "कित्ते", "कितने", "कित्ती", "कितनी", "इत्ता", "इतना", "इत्ते", "इतने", "इत्ती", "इतनी", "उत्ता", "उतना",
-                // Urdu
-                "نکو", "نہیں", "نکّو", "نہیں",
-                "کائیکو", "کیوں", "کائکو", "کیوں", "کایکو", "کیوں", "کیکو", "کیوں",
-                "میرےکو", "مجھے", "تیرےکو", "تجھے", "اپنکو", "ہمیں",
-                "ہاؤ", "ہاں", "پوٹّی", "لڑکی", "پوٹّا", "لڑکا",
-                "کتّا", "کتنا", "کتّے", "کتنے", "اتّا", "اتنا", "اتّے", "اتنے"
+                "\u0939\u094C", "\u0939\u093E\u0901", "\u0939\u093E\u090A", "\u0939\u093E\u0901",
+                "\u0939\u093E\u0909", "\u0939\u093E\u0901", "\u0928\u0915\u094D\u0915\u094B", "\u0928\u0939\u0940\u0902",
+                "\u0928\u0915\u094B", "\u0928\u0939\u0940\u0902", "\u0928\u0915\u094D\u0915\u0942", "\u0928\u0939\u0940\u0902",
+                "\u0928\u0915\u094D\u0915\u094B \u092C\u093E\u092C\u093E", "\u0928\u0939\u0940\u0902", "\u0928\u0915\u094B \u092C\u093E\u092C\u093E", "\u0928\u0939\u0940\u0902",
+                "\u0915\u093E\u0907\u0915\u0942", "\u0915\u094D\u092F\u094B\u0902", "\u0915\u0948\u0915\u0942", "\u0915\u094D\u092F\u094B\u0902",
+                "\u0915\u093E\u092F\u0915\u0942", "\u0915\u094D\u092F\u094B\u0902", "\u0915\u093E\u0907\u0915\u094B", "\u0915\u094D\u092F\u094B\u0902",
+                "\u0915\u093E\u092F\u0915\u094B", "\u0915\u094D\u092F\u094B\u0902", "\u0915\u0948\u0915\u094B", "\u0915\u094D\u092F\u094B\u0902",
+                "\u0915\u094D\u092F\u093E\u0907\u0915\u0942", "\u0915\u094D\u092F\u094B\u0902", "\u0915\u094D\u092F\u0948\u0915\u0942", "\u0915\u094D\u092F\u094B\u0902",
+                "\u0915\u093E\u0939\u0947\u0915\u0942", "\u0915\u094D\u092F\u094B\u0902", "\u0915\u093E\u0939\u0947\u0915\u094B", "\u0915\u094D\u092F\u094B\u0902",
+                "\u0915\u093E\u0907\u0915\u0942 \u0930\u0947", "\u0915\u094D\u092F\u094B\u0902", "\u0915\u0948\u0915\u0942 \u0930\u0947", "\u0915\u094D\u092F\u094B\u0902",
+                "\u0915\u093E\u092F\u0915\u0942 \u0930\u0947", "\u0915\u094D\u092F\u094B\u0902", "\u092E\u0947\u0930\u0947\u0915\u0941", "\u092E\u0941\u091D\u0947",
+                "\u092E\u0947\u0930\u0947\u0915\u0942", "\u092E\u0941\u091D\u0947", "\u092E\u0947\u0930\u0947\u0915\u094B", "\u092E\u0941\u091D\u0947",
+                "\u092E\u0947\u0930\u0947 \u0915\u094B", "\u092E\u0941\u091D\u0947", "\u092E\u0947\u0930\u0947 \u0915\u0942", "\u092E\u0941\u091D\u0947",
+                "\u092E\u0947\u0930\u0947 \u0915\u0941", "\u092E\u0941\u091D\u0947", "\u0924\u0947\u0930\u0947\u0915\u0941", "\u0924\u0941\u091D\u0947",
+                "\u0924\u0947\u0930\u0947\u0915\u0942", "\u0924\u0941\u091D\u0947", "\u0924\u0947\u0930\u0947\u0915\u094B", "\u0924\u0941\u091D\u0947",
+                "\u0924\u0947\u0930\u0947 \u0915\u094B", "\u0924\u0941\u091D\u0947", "\u0924\u0947\u0930\u0947 \u0915\u0942", "\u0924\u0941\u091D\u0947",
+                "\u0924\u0947\u0930\u0947 \u0915\u0941", "\u0924\u0941\u091D\u0947", "\u0924\u0941\u092E\u0915\u0941", "\u0924\u0941\u092E\u0915\u094B",
+                "\u0924\u0941\u092E\u0915\u0942", "\u0924\u0941\u092E\u0915\u094B", "\u0909\u0928\u0915\u0941", "\u0909\u0928\u0915\u094B",
+                "\u0909\u0928\u0915\u0942", "\u0909\u0928\u0915\u094B", "\u0907\u0928\u0915\u0941", "\u0907\u0928\u0915\u094B",
+                "\u0907\u0928\u0915\u0942", "\u0907\u0928\u0915\u094B", "\u0909\u0938\u0915\u0941", "\u0909\u0938\u0915\u094B",
+                "\u0909\u0938\u0915\u0942", "\u0909\u0938\u0915\u094B", "\u0907\u0938\u0915\u0941", "\u0907\u0938\u0915\u094B",
+                "\u0907\u0938\u0915\u0942", "\u0907\u0938\u0915\u094B", "\u0905\u092A\u0928\u0915\u0941", "\u0939\u092E\u0947\u0902",
+                "\u0905\u092A\u0928\u0915\u0942", "\u0939\u092E\u0947\u0902", "\u0905\u092A\u0928\u0915\u094B", "\u0939\u092E\u0947\u0902",
+                "\u0905\u092A\u0928\u0947\u0915\u0941", "\u092E\u0941\u091D\u0947", "\u0905\u092A\u0928\u0947\u0915\u0942", "\u092E\u0941\u091D\u0947",
+                "\u0905\u092A\u0928\u0947\u0915\u094B", "\u092E\u0941\u091D\u0947", "\u0905\u092A\u0941\u0928", "\u092E\u0948\u0902",
+                "\u0905\u092A\u0941\u0928 \u0938\u0947\u091F", "\u092E\u0948\u0902 \u0920\u0940\u0915 \u0939\u0942\u0901", "\u0905\u092A\u0941\u0928 \u0938\u0947\u091F \u0939\u0948", "\u092E\u0948\u0902 \u0920\u0940\u0915 \u0939\u0942\u0901",
+                "\u0907\u091A", "\u0939\u0940", "\u0907\u0927\u0930\u093F\u091A", "\u092F\u0939\u0940\u0902",
+                "\u0907\u0927\u0930\u0940\u091A", "\u092F\u0939\u0940\u0902", "\u0907\u0927\u0930 \u0907\u091A", "\u092F\u0939\u0940\u0902",
+                "\u0909\u0927\u0930\u093F\u091A", "\u0935\u0939\u0940\u0902", "\u0909\u0927\u0930\u0940\u091A", "\u0935\u0939\u0940\u0902",
+                "\u0909\u0927\u0930 \u0907\u091A", "\u0935\u0939\u0940\u0902", "\u0905\u092C\u093F\u091A", "\u0905\u092D\u0940",
+                "\u0905\u092C\u0940\u091A", "\u0905\u092D\u0940", "\u0905\u092D\u0940\u091A", "\u0905\u092D\u0940",
+                "\u0905\u092D\u093F\u091A", "\u0905\u092D\u0940", "\u0915\u0932\u093F\u091A", "\u0915\u0932 \u0939\u0940",
+                "\u0915\u0932\u0940\u091A", "\u0915\u0932 \u0939\u0940", "\u0906\u091C\u093F\u091A", "\u0906\u091C \u0939\u0940",
+                "\u0906\u091C\u0940\u091A", "\u0906\u091C \u0939\u0940", "\u0910\u0938\u093E\u0907\u091A", "\u0910\u0938\u0947 \u0939\u0940",
+                "\u0910\u0938\u0948\u091A", "\u0910\u0938\u0947 \u0939\u0940", "\u0910\u0938\u0947\u0907\u091A", "\u0910\u0938\u0947 \u0939\u0940",
+                "\u0910\u0938\u093E\u091A", "\u0910\u0938\u0947 \u0939\u0940", "\u0910\u0938\u093E\u0908\u091A", "\u0910\u0938\u0947 \u0939\u0940",
+                "\u0915\u093F\u0927\u0930\u0915\u0941", "\u0915\u0939\u093E\u0901", "\u0915\u093F\u0927\u0930\u0915\u0942", "\u0915\u0939\u093E\u0901",
+                "\u0915\u093F\u0927\u0930 \u0915\u0942", "\u0915\u0939\u093E\u0901", "\u0915\u093F\u0927\u0930 \u0915\u0941", "\u0915\u0939\u093E\u0901",
+                "\u0915\u093F\u0924\u094D\u0924\u093E", "\u0915\u093F\u0924\u0928\u093E", "\u0915\u093F\u0924\u094D\u0924\u0947", "\u0915\u093F\u0924\u0928\u0947",
+                "\u0915\u093F\u0924\u094D\u0924\u0940", "\u0915\u093F\u0924\u0928\u0940", "\u0907\u0924\u094D\u0924\u093E", "\u0907\u0924\u0928\u093E",
+                "\u0907\u0924\u094D\u0924\u0947", "\u0907\u0924\u0928\u0947", "\u0907\u0924\u094D\u0924\u0940", "\u0907\u0924\u0928\u0940",
+                "\u0909\u0924\u094D\u0924\u093E", "\u0909\u0924\u0928\u093E", "\u0939\u0932\u094D\u0932\u0942", "\u0927\u0940\u0930\u0947",
+                "\u0939\u0932\u094D\u0932\u0941", "\u0927\u0940\u0930\u0947", "\u092A\u094B\u091F\u094D\u091F\u0940", "\u0932\u0921\u093C\u0915\u0940",
+                "\u092A\u094B\u091F\u094D\u091F\u093E", "\u0932\u0921\u093C\u0915\u093E", "\u092A\u094B\u091F\u094D\u091F\u0947", "\u0932\u0921\u093C\u0915\u0947",
+                "\u0915\u093F\u0930\u094D\u0930\u093E\u0915", "\u091C\u093C\u092C\u0930\u0926\u0938\u094D\u0924", "\u0915\u093F\u0930\u0915", "\u091C\u093C\u092C\u0930\u0926\u0938\u094D\u0924",
+                "\u0915\u093F\u0930\u094D\u0930\u0915", "\u091C\u093C\u092C\u0930\u0926\u0938\u094D\u0924", "\u0915\u093F\u0930\u093E\u0915", "\u091C\u093C\u092C\u0930\u0926\u0938\u094D\u0924",
+                "\u0915\u093F\u0930\u094D\u0930\u093E\u0915\u094D", "\u091C\u093C\u092C\u0930\u0926\u0938\u094D\u0924", "\u0918\u0948\u0902\u091F", "\u0936\u093E\u0928\u0926\u093E\u0930",
+                "\u091D\u0915\u093E\u0938", "\u0936\u093E\u0928\u0926\u093E\u0930", "\u091D\u0915\u094D\u0915\u093E\u0938", "\u0936\u093E\u0928\u0926\u093E\u0930",
+                "\u092B\u094B\u0915\u091F", "\u092E\u0941\u092B\u093C\u094D\u0924 \u092E\u0947\u0902", "\u092B\u093C\u094B\u0915\u091F", "\u092E\u0941\u092B\u093C\u094D\u0924 \u092E\u0947\u0902",
+                "\u092B\u094B\u0915\u091F \u092E\u0947\u0902", "\u092E\u0941\u092B\u093C\u094D\u0924 \u092E\u0947\u0902", "\u092B\u093C\u094B\u0915\u091F \u092E\u0947\u0902", "\u092E\u0941\u092B\u093C\u094D\u0924 \u092E\u0947\u0902",
+                "\u0939\u0932\u0915\u091F", "\u0918\u091F\u093F\u092F\u093E", "\u0932\u092A\u094D\u092A\u0942", "\u092C\u0947\u0935\u0915\u0942\u092B\u093C",
+                "\u092C\u0915\u0932\u094B\u0932", "\u092C\u0947\u0935\u0915\u0942\u092B\u093C", "\u0918\u094B\u091A\u0942", "\u092C\u0947\u0935\u0915\u0942\u092B\u093C",
+                "\u0918\u094B\u0902\u091A\u0942", "\u092C\u0947\u0935\u0915\u0942\u092B\u093C", "\u0936\u093E\u0928\u093E", "\u091A\u093E\u0932\u093E\u0915",
+                "\u0936\u093E\u0923\u093E", "\u091A\u093E\u0932\u093E\u0915", "\u0936\u094D\u092F\u093E\u0928\u093E", "\u091A\u093E\u0932\u093E\u0915",
+                "\u0936\u093E\u0928\u093E\u092A\u0902\u0924\u0940", "\u091C\u093C\u094D\u092F\u093E\u0926\u093E \u0939\u094B\u0936\u093F\u092F\u093E\u0930\u0940", "\u0936\u093E\u0928\u093E \u092A\u0902\u0924\u0940", "\u091C\u093C\u094D\u092F\u093E\u0926\u093E \u0939\u094B\u0936\u093F\u092F\u093E\u0930\u0940",
+                "\u0936\u093E\u0928\u092A\u091F\u094D\u091F\u0940", "\u091C\u093C\u094D\u092F\u093E\u0926\u093E \u0939\u094B\u0936\u093F\u092F\u093E\u0930\u0940", "\u0936\u093E\u0923\u092A\u091F\u094D\u091F\u0940", "\u091C\u093C\u094D\u092F\u093E\u0926\u093E \u0939\u094B\u0936\u093F\u092F\u093E\u0930\u0940",
+                "\u0936\u093E\u0928\u093E \u092A\u091F\u094D\u091F\u0940", "\u091C\u093C\u094D\u092F\u093E\u0926\u093E \u0939\u094B\u0936\u093F\u092F\u093E\u0930\u0940", "\u0936\u093E\u0928\u093E \u092E\u0924 \u092C\u0928", "\u091C\u093C\u094D\u092F\u093E\u0926\u093E \u0939\u094B\u0936\u093F\u092F\u093E\u0930 \u092E\u0924 \u092C\u0928\u094B",
+                "\u0936\u093E\u0923\u093E \u092E\u0924 \u092C\u0928", "\u091C\u093C\u094D\u092F\u093E\u0926\u093E \u0939\u094B\u0936\u093F\u092F\u093E\u0930 \u092E\u0924 \u092C\u0928\u094B", "\u0939\u0935\u093E \u092E\u0947\u0902 \u092E\u0924 \u0909\u0921\u093C", "\u091C\u093C\u094D\u092F\u093E\u0926\u093E \u0918\u092E\u0902\u0921 \u092E\u0924 \u0915\u0930\u094B",
+                "\u092C\u093F\u0902\u0926\u093E\u0938", "\u092C\u0947\u092B\u093C\u093F\u0915\u094D\u0930", "\u092C\u093F\u0928\u094D\u0926\u093E\u0938", "\u092C\u0947\u092B\u093C\u093F\u0915\u094D\u0930",
+                "\u091F\u092A\u094B\u0930\u0940", "\u0906\u0935\u093E\u0930\u093E", "\u092C\u0915\u0948\u0924\u0940", "\u092C\u0915\u0935\u093E\u0938",
+                "\u092C\u0948\u0917\u0928 \u0915\u0947 \u092C\u093E\u0924\u093E\u0902", "\u092C\u0915\u0935\u093E\u0938 \u092C\u093E\u0924\u0947\u0902", "\u092C\u0948\u0902\u0917\u0928 \u0915\u0947 \u092C\u093E\u0924\u093E\u0902", "\u092C\u0915\u0935\u093E\u0938 \u092C\u093E\u0924\u0947\u0902",
+                "\u092C\u0948\u0917\u0928 \u0915\u0940 \u092C\u093E\u0924\u0947\u0902", "\u092C\u0915\u0935\u093E\u0938 \u092C\u093E\u0924\u0947\u0902", "\u092C\u0948\u0902\u0917\u0928 \u0915\u0940 \u092C\u093E\u0924\u0947\u0902", "\u092C\u0915\u0935\u093E\u0938 \u092C\u093E\u0924\u0947\u0902",
+                "\u092C\u0948\u0917\u0928 \u0915\u0947 \u092C\u093E\u0924\u0947\u0902", "\u092C\u0915\u0935\u093E\u0938 \u092C\u093E\u0924\u0947\u0902", "\u0915\u094D\u092F\u093E \u092C\u0948\u0917\u0928", "\u0915\u094D\u092F\u093E \u092C\u0915\u0935\u093E\u0938",
+                "\u0915\u094D\u092F\u093E \u092C\u0948\u0902\u0917\u0928", "\u0915\u094D\u092F\u093E \u092C\u0915\u0935\u093E\u0938", "\u092C\u0948\u0917\u0928 \u092E\u0947\u0902 \u091F\u093E\u0902\u0917", "\u092C\u0947\u0915\u093E\u0930 \u0915\u0940 \u092C\u093E\u0924",
+                "\u092C\u0948\u0902\u0917\u0928 \u092E\u0947\u0902 \u091F\u093E\u0902\u0917", "\u092C\u0947\u0915\u093E\u0930 \u0915\u0940 \u092C\u093E\u0924", "\u092C\u0948\u0917\u0928 \u092E\u0947\u0902 \u091F\u093E\u0901\u0917", "\u092C\u0947\u0915\u093E\u0930 \u0915\u0940 \u092C\u093E\u0924",
+                "\u0917\u0930\u094D\u0926\u0940", "\u092D\u0940\u0921\u093C", "\u092B\u0941\u0932 \u091F\u093E\u0907\u091F", "\u0928\u0936\u0947 \u092E\u0947\u0902 \u0927\u0941\u0924",
+                "\u092B\u0941\u0932 \u091F\u093E\u0908\u091F", "\u0928\u0936\u0947 \u092E\u0947\u0902 \u0927\u0941\u0924", "\u092D\u0947\u091C\u093E \u092B\u094D\u0930\u093E\u0908", "\u0926\u093F\u092E\u093E\u0917\u093C \u0916\u093C\u0930\u093E\u092C",
+                "\u092D\u0947\u091C\u093E \u092B\u093C\u094D\u0930\u093E\u0908", "\u0926\u093F\u092E\u093E\u0917\u093C \u0916\u093C\u0930\u093E\u092C", "\u0926\u093F\u092E\u093E\u0917 \u0915\u093E \u0926\u0939\u0940", "\u0926\u093F\u092E\u093E\u0917\u093C \u0916\u093C\u0930\u093E\u092C",
+                "\u0926\u093F\u092E\u093E\u0917\u093C \u0915\u093E \u0926\u0939\u0940", "\u0926\u093F\u092E\u093E\u0917\u093C \u0916\u093C\u0930\u093E\u092C", "\u0939\u0932\u094D\u0932\u0915", "\u0939\u093E\u0932\u0924 \u0916\u093C\u0930\u093E\u092C",
+                "\u0932\u092B\u0921\u093C\u093E", "\u091D\u0917\u0921\u093C\u093E", "\u0932\u092B\u093C\u0921\u093C\u093E", "\u091D\u0917\u0921\u093C\u093E",
+                "\u0932\u094B\u091A\u093E", "\u0917\u0921\u093C\u092C\u0921\u093C", "\u0928\u094C\u091F\u0902\u0915\u0940", "\u0928\u093E\u091F\u0915",
+                "\u0915\u094D\u092F\u093E \u0938\u0940\u0928", "\u0915\u094D\u092F\u093E \u0939\u093E\u0932 \u0939\u0948", "\u0938\u0940\u0928 \u0915\u094D\u092F\u093E", "\u0915\u094D\u092F\u093E \u0939\u093E\u0932 \u0939\u0948",
+                "\u0915\u094D\u092F\u093E \u0938\u0940\u0928 \u0939\u0948", "\u0915\u094D\u092F\u093E \u0939\u093E\u0932 \u0939\u0948", "\u0938\u0940\u0928 \u0915\u094D\u092F\u093E \u0939\u0948", "\u0915\u094D\u092F\u093E \u0939\u093E\u0932 \u0939\u0948",
+                "\u092A\u0942\u0930\u093E \u0938\u0940\u0928", "\u092A\u0942\u0930\u093E \u092E\u093E\u092E\u0932\u093E", "\u0928\u0908 \u092E\u093E\u0932\u0942\u092E", "\u0928\u0939\u0940\u0902 \u092E\u093E\u0932\u0942\u092E",
+                "\u092C\u093E\u0924\u093E\u0902", "\u092C\u093E\u0924\u0947\u0902", "\u0932\u094B\u0917\u093E\u0902", "\u0932\u094B\u0917",
+                "\u091A\u0940\u091C\u093C\u093E\u0902", "\u091A\u0940\u091C\u093C\u0947\u0902", "\u091A\u0940\u091C\u093E\u0902", "\u091A\u0940\u091C\u093C\u0947\u0902",
+                "\u092A\u0948\u0938\u093E\u0902", "\u092A\u0948\u0938\u0947", "\u0930\u0939\u0928\u0926\u0947", "\u0930\u0939\u0928\u0947 \u0926\u094B",
+                "\u0930\u0948\u0928\u0926\u0947", "\u0930\u0939\u0928\u0947 \u0926\u094B", "\u0930\u0947\u0939\u0902\u0926\u0947", "\u0930\u0939\u0928\u0947 \u0926\u094B",
+                "\u0930\u0939\u0928 \u0926\u0947", "\u0930\u0939\u0928\u0947 \u0926\u094B", "\u0916\u093E\u0932\u093F\u092F\u093E", "\u0916\u093E \u0932\u093F\u092F\u093E",
+                "\u0916\u093E\u0932\u0940 \u092A\u0940\u0932\u0940", "\u092C\u0947\u0915\u093E\u0930 \u092E\u0947\u0902", "\u0916\u093C\u093E\u0932\u0940 \u092A\u0940\u0932\u0940", "\u092C\u0947\u0915\u093E\u0930 \u092E\u0947\u0902",
+                "\u06C1\u0627\u0624", "\u06C1\u0627\u06BA", "\u0646\u06A9\u0648", "\u0646\u06C1\u06CC\u06BA",
+                "\u0646\u06A9\u0651\u0648", "\u0646\u06C1\u06CC\u06BA", "\u0646\u06A9\u0648\u06BA", "\u0646\u06C1\u06CC\u06BA",
+                "\u0646\u06A9\u0648 \u0628\u0627\u0628\u0627", "\u0646\u06C1\u06CC\u06BA", "\u06A9\u0627\u0626\u06CC\u06A9\u0648", "\u06A9\u06CC\u0648\u06BA",
+                "\u06A9\u0627\u0626\u06A9\u0648", "\u06A9\u06CC\u0648\u06BA", "\u06A9\u0627\u06CC\u06A9\u0648", "\u06A9\u06CC\u0648\u06BA",
+                "\u06A9\u06CC\u06A9\u0648", "\u06A9\u06CC\u0648\u06BA", "\u06A9\u06CC\u0627\u0626\u06CC\u06A9\u0648", "\u06A9\u06CC\u0648\u06BA",
+                "\u06A9\u0627\u06C1\u06D2\u06A9\u0648", "\u06A9\u06CC\u0648\u06BA", "\u06A9\u0627\u06C1\u06D2 \u06A9\u0648", "\u06A9\u06CC\u0648\u06BA",
+                "\u06A9\u0627\u0626\u06CC\u06A9\u0648 \u0631\u06D2", "\u06A9\u06CC\u0648\u06BA", "\u06A9\u0627\u06CC\u06A9\u0648 \u0631\u06D2", "\u06A9\u06CC\u0648\u06BA",
+                "\u0645\u06CC\u0631\u06D2\u06A9\u0648", "\u0645\u062C\u06BE\u06D2", "\u0645\u06CC\u0631\u06D2 \u06A9\u0648", "\u0645\u062C\u06BE\u06D2",
+                "\u062A\u06CC\u0631\u06D2\u06A9\u0648", "\u062A\u062C\u06BE\u06D2", "\u062A\u06CC\u0631\u06D2 \u06A9\u0648", "\u062A\u062C\u06BE\u06D2",
+                "\u062A\u0645\u06A9\u0648", "\u062A\u0645 \u06A9\u0648", "\u0627\u067E\u0646\u06A9\u0648", "\u06C1\u0645\u06CC\u06BA",
+                "\u0627\u067E\u0646\u06D2\u06A9\u0648", "\u0645\u062C\u06BE\u06D2", "\u0627\u0628\u06CC\u0686", "\u0627\u0628\u06BE\u06CC",
+                "\u0627\u0628\u06BE\u06CC\u0686", "\u0627\u0628\u06BE\u06CC", "\u06A9\u0644\u06CC\u0686", "\u06A9\u0644 \u06C1\u06CC",
+                "\u0622\u062C\u06CC\u0686", "\u0622\u062C \u06C1\u06CC", "\u0627\u06CC\u0633\u0627\u0626\u0686", "\u0627\u06CC\u0633\u06D2 \u06C1\u06CC",
+                "\u0627\u06CC\u0633\u06CC\u0686", "\u0627\u06CC\u0633\u06D2 \u06C1\u06CC", "\u0627\u06CC\u0633\u0627\u0626\u06CC\u0686", "\u0627\u06CC\u0633\u06D2 \u06C1\u06CC",
+                "\u06A9\u062F\u06BE\u0631\u06A9\u0648", "\u06A9\u06C1\u0627\u06BA", "\u06A9\u062F\u06BE\u0631 \u06A9\u0648", "\u06A9\u06C1\u0627\u06BA",
+                "\u06A9\u062A\u0651\u0627", "\u06A9\u062A\u0646\u0627", "\u06A9\u062A\u0651\u06D2", "\u06A9\u062A\u0646\u06D2",
+                "\u0627\u062A\u0651\u0627", "\u0627\u062A\u0646\u0627", "\u0627\u062A\u0651\u06D2", "\u0627\u062A\u0646\u06D2",
+                "\u067E\u0648\u0679\u0651\u06CC", "\u0644\u0691\u06A9\u06CC", "\u067E\u0648\u0679\u0651\u0627", "\u0644\u0691\u06A9\u0627",
+                "\u06A9\u0631\u0651\u0627\u06A9", "\u0632\u0628\u0631\u062F\u0633\u062A", "\u06A9\u0631\u0627\u06A9", "\u0632\u0628\u0631\u062F\u0633\u062A",
+                "\u06A9\u0650\u0631\u0651\u0627\u06A9", "\u0632\u0628\u0631\u062F\u0633\u062A", "\u06AF\u06BE\u06CC\u0646\u0679", "\u0634\u0627\u0646\u062F\u0627\u0631",
+                "\u062C\u06BE\u06A9\u0627\u0633", "\u0634\u0627\u0646\u062F\u0627\u0631", "\u0641\u0648\u06A9\u0679", "\u0645\u0641\u062A \u0645\u06CC\u06BA",
+                "\u0641\u0648\u06A9\u062A", "\u0645\u0641\u062A \u0645\u06CC\u06BA", "\u0641\u0648\u06A9\u0679 \u0645\u06CC\u06BA", "\u0645\u0641\u062A \u0645\u06CC\u06BA",
+                "\u06C1\u0644\u06A9\u0679", "\u06AF\u06BE\u0679\u06CC\u0627", "\u06C1\u0644\u06A9\u062A", "\u06AF\u06BE\u0679\u06CC\u0627",
+                "\u0644\u067E\u0651\u0648", "\u0628\u06CC\u0648\u0642\u0648\u0641", "\u0628\u06A9\u0644\u0648\u0644", "\u0628\u06CC\u0648\u0642\u0648\u0641",
+                "\u06AF\u06BE\u0648\u0686\u0648", "\u0628\u06CC\u0648\u0642\u0648\u0641", "\u06AF\u06BE\u0648\u0646\u0686\u0648", "\u0628\u06CC\u0648\u0642\u0648\u0641",
+                "\u0634\u06CC\u0627\u0646\u0627", "\u0686\u0627\u0644\u0627\u06A9", "\u0634\u0627\u0646\u0627 \u067E\u0646\u062A\u06CC", "\u0632\u06CC\u0627\u062F\u06C1 \u06C1\u0648\u0634\u06CC\u0627\u0631\u06CC",
+                "\u0634\u0627\u0646\u0627\u067E\u0646\u062A\u06CC", "\u0632\u06CC\u0627\u062F\u06C1 \u06C1\u0648\u0634\u06CC\u0627\u0631\u06CC", "\u0634\u06CC\u0627\u0646\u0627 \u067E\u0646\u062A\u06CC", "\u0632\u06CC\u0627\u062F\u06C1 \u06C1\u0648\u0634\u06CC\u0627\u0631\u06CC",
+                "\u0634\u0627\u0646\u0627 \u0645\u062A \u0628\u0646", "\u0632\u06CC\u0627\u062F\u06C1 \u06C1\u0648\u0634\u06CC\u0627\u0631 \u0645\u062A \u0628\u0646\u0648", "\u0634\u06CC\u0627\u0646\u0627 \u0645\u062A \u0628\u0646", "\u0632\u06CC\u0627\u062F\u06C1 \u06C1\u0648\u0634\u06CC\u0627\u0631 \u0645\u062A \u0628\u0646\u0648",
+                "\u06C1\u0648\u0627 \u0645\u06CC\u06BA \u0645\u062A \u0627\u0691", "\u0632\u06CC\u0627\u062F\u06C1 \u063A\u0631\u0648\u0631 \u0645\u062A \u06A9\u0631\u0648", "\u0628\u0646\u062F\u0627\u0633", "\u0628\u06D2 \u0641\u06A9\u0631",
+                "\u0679\u067E\u0648\u0631\u06CC", "\u0622\u0648\u0627\u0631\u06C1", "\u0628\u06A9\u06CC\u062A\u06CC", "\u0628\u06A9\u0648\u0627\u0633",
+                "\u0628\u06CC\u06AF\u0646 \u06A9\u06D2 \u0628\u0627\u062A\u0627\u06BA", "\u0628\u06A9\u0648\u0627\u0633 \u0628\u0627\u062A\u06CC\u06BA", "\u0628\u06CC\u0646\u06AF\u0646 \u06A9\u06D2 \u0628\u0627\u062A\u0627\u06BA", "\u0628\u06A9\u0648\u0627\u0633 \u0628\u0627\u062A\u06CC\u06BA",
+                "\u0628\u06CC\u06AF\u0646 \u06A9\u06CC \u0628\u0627\u062A\u06CC\u06BA", "\u0628\u06A9\u0648\u0627\u0633 \u0628\u0627\u062A\u06CC\u06BA", "\u0628\u06CC\u0646\u06AF\u0646 \u06A9\u06CC \u0628\u0627\u062A\u06CC\u06BA", "\u0628\u06A9\u0648\u0627\u0633 \u0628\u0627\u062A\u06CC\u06BA",
+                "\u06A9\u06CC\u0627 \u0628\u06CC\u06AF\u0646", "\u06A9\u06CC\u0627 \u0628\u06A9\u0648\u0627\u0633", "\u06A9\u06CC\u0627 \u0628\u06CC\u0646\u06AF\u0646", "\u06A9\u06CC\u0627 \u0628\u06A9\u0648\u0627\u0633",
+                "\u0628\u06CC\u06AF\u0646 \u0645\u06CC\u06BA \u0679\u0627\u0646\u06AF", "\u0628\u06CC\u06A9\u0627\u0631 \u06A9\u06CC \u0628\u0627\u062A", "\u0628\u06CC\u0646\u06AF\u0646 \u0645\u06CC\u06BA \u0679\u0627\u0646\u06AF", "\u0628\u06CC\u06A9\u0627\u0631 \u06A9\u06CC \u0628\u0627\u062A",
+                "\u0641\u0644 \u0679\u0627\u0626\u0679", "\u0646\u0634\u06D2 \u0645\u06CC\u06BA \u062F\u06BE\u062A", "\u0628\u06BE\u06CC\u062C\u0627 \u0641\u0631\u0627\u0626\u06CC", "\u062F\u0645\u0627\u063A \u062E\u0631\u0627\u0628",
+                "\u062F\u0645\u0627\u063A \u06A9\u0627 \u062F\u06C1\u06CC", "\u062F\u0645\u0627\u063A \u062E\u0631\u0627\u0628", "\u0644\u0641\u0691\u0627", "\u062C\u06BE\u06AF\u0691\u0627",
+                "\u0644\u0648\u0686\u0627", "\u06AF\u0691\u0628\u0691", "\u0646\u0648\u0679\u0646\u06A9\u06CC", "\u0688\u0631\u0627\u0645\u06C1",
+                "\u06A9\u06CC\u0627 \u0633\u06CC\u0646", "\u06A9\u06CC\u0627 \u062D\u0627\u0644 \u06C1\u06D2", "\u0633\u06CC\u0646 \u06A9\u06CC\u0627", "\u06A9\u06CC\u0627 \u062D\u0627\u0644 \u06C1\u06D2",
+                "\u06A9\u06CC\u0627 \u0633\u06CC\u0646 \u06C1\u06D2", "\u06A9\u06CC\u0627 \u062D\u0627\u0644 \u06C1\u06D2", "\u0633\u06CC\u0646 \u06A9\u06CC\u0627 \u06C1\u06D2", "\u06A9\u06CC\u0627 \u062D\u0627\u0644 \u06C1\u06D2",
+                "\u067E\u0648\u0631\u0627 \u0633\u06CC\u0646", "\u067E\u0648\u0631\u0627 \u0645\u0639\u0627\u0645\u0644\u06C1", "\u0646\u0626\u06CC \u0645\u0639\u0644\u0648\u0645", "\u0646\u06C1\u06CC\u06BA \u0645\u0639\u0644\u0648\u0645",
+                "\u0628\u0627\u062A\u0627\u06BA", "\u0628\u0627\u062A\u06CC\u06BA", "\u0644\u0648\u06AF\u0627\u06BA", "\u0644\u0648\u06AF",
+                "\u0631\u06C1\u0646\u062F\u06D2", "\u0631\u06C1\u0646\u06D2 \u062F\u0648", "\u0631\u06C1\u0646 \u062F\u06D2", "\u0631\u06C1\u0646\u06D2 \u062F\u0648",
+                "\u06A9\u06BE\u0627\u0644\u06CC\u0627", "\u06A9\u06BE\u0627 \u0644\u06CC\u0627", "\u062E\u0627\u0644\u06CC \u067E\u06CC\u0644\u06CC", "\u0628\u06CC\u06A9\u0627\u0631 \u0645\u06CC\u06BA"
         };
         for (int i = 0; i + 1 < pairs.length; i += 2) {
-            WORDS.put(pairs[i], pairs[i + 1]);
+            add(pairs[i], pairs[i + 1]);
         }
-        String[][] hindiEndings = {{"रा", "रहा"}, {"री", "रही"}, {"रे", "रहे"}, {"रूँ", "रहा हूँ"}, {"रूं", "रहा हूँ"}, {"रौं", "रहा हूँ"}, {"रैं", "रहे हैं"}};
+        java.util.HashSet<String> ordinary = new java.util.HashSet<>(java.util.Arrays.asList(ORDINARY));
+        String[][] hindiEndings = {{"\u0930\u093E", "\u0930\u0939\u093E"}, {"\u0930\u0940", "\u0930\u0939\u0940"}, {"\u0930\u0947", "\u0930\u0939\u0947"}, {"\u0930\u0942\u0901", "\u0930\u0939\u093E \u0939\u0942\u0901"}, {"\u0930\u0942\u0902", "\u0930\u0939\u093E \u0939\u0942\u0901"}, {"\u0930\u094C\u0902", "\u0930\u0939\u093E \u0939\u0942\u0901"}, {"\u0930\u0948\u0902", "\u0930\u0939\u0947 \u0939\u0948\u0902"}};
         for (String stem : HINDI_STEMS) {
             for (String[] ending : hindiEndings) {
-                String joined = stem + ending[0];
-                // "आरी" (a saw), "जारी" (ongoing), "सोरी" (sorry), "लारी", "पीरी" stay as they are: they are ordinary words
-                if (joined.equals("जारी") || joined.equals("आरी") || joined.equals("आरा") || joined.equals("सोरी") || joined.equals("लारी") || joined.equals("होरी")) {
-                    continue;
+                if (!ordinary.contains(stem + ending[0])) {
+                    WORDS.put(stem + ending[0], stem + " " + ending[1]);
                 }
-                WORDS.put(joined, stem + " " + ending[1]);
             }
         }
-        String[][] urduEndings = {{"را", "رہا"}, {"ری", "رہی"}, {"رے", "رہے"}, {"روں", "رہا ہوں"}};
+        String[][] urduEndings = {{"\u0631\u0627", "\u0631\u06C1\u0627"}, {"\u0631\u06CC", "\u0631\u06C1\u06CC"}, {"\u0631\u06D2", "\u0631\u06C1\u06D2"}, {"\u0631\u0648\u06BA", "\u0631\u06C1\u0627 \u06C1\u0648\u06BA"}};
         for (String stem : URDU_STEMS) {
             for (String[] ending : urduEndings) {
-                String joined = stem + ending[0];
-                if (joined.equals("سورے") || joined.equals("لاری") || joined.equals("پیری") || joined.equals("ہوری") || joined.equals("سوری")) {
-                    continue;
+                if (!ordinary.contains(stem + ending[0])) {
+                    WORDS.put(stem + ending[0], stem + " " + ending[1]);
                 }
-                WORDS.put(joined, stem + " " + ending[1]);
             }
         }
-        // "ja" and "aa" in Urdu script: only the forms that are not ordinary words ("جاری" is "ongoing", "آری" is a saw)
-        WORDS.put("جارا", "جا رہا");
-        WORDS.put("جارے", "جا رہے");
-        WORDS.put("جاروں", "جا رہا ہوں");
-        WORDS.put("آرا", "آ رہا");
-        WORDS.put("آرے", "آ رہے");
-        WORDS.put("آروں", "آ رہا ہوں");
+        // "ja" and "aa" in Urdu script: only the forms that are not ordinary words ("jaari" is "ongoing", "aari" is a saw)
+        WORDS.put("\u062C\u0627\u0631\u0627", "\u062C\u0627 \u0631\u06C1\u0627");
+        WORDS.put("\u062C\u0627\u0631\u06D2", "\u062C\u0627 \u0631\u06C1\u06D2");
+        WORDS.put("\u062C\u0627\u0631\u0648\u06BA", "\u062C\u0627 \u0631\u06C1\u0627 \u06C1\u0648\u06BA");
+        WORDS.put("\u0622\u0631\u0627", "\u0622 \u0631\u06C1\u0627");
+        WORDS.put("\u0622\u0631\u06D2", "\u0622 \u0631\u06C1\u06D2");
+        WORDS.put("\u0622\u0631\u0648\u06BA", "\u0622 \u0631\u06C1\u0627 \u06C1\u0648\u06BA");
     }
 
     private DeccaniNormalizer() {
     }
 
-    private static boolean isPunctuation(char c) {
-        return ".,!?;:\"'()[]\u0964\u06D4\u060C\u061F\u061B".indexOf(c) >= 0;
+    /** @return how many Deccani forms the dictionary knows */
+    public static int size() {
+        return WORDS.size();
     }
 
-    /** @return the text with the Deccani words it contains replaced by their standard form */
+    private static boolean isPunctuation(char c) {
+        return ".,!?;:\"'()[]\u0964\u06D4\u060C\u061F\u061B-".indexOf(c) >= 0;
+    }
+
+    /** @return the text with the Deccani words and phrases it contains replaced by their standard form */
     public static String normalize(String text) {
         if (text == null || text.isEmpty()) {
             return text;
         }
         String[] tokens = text.split(" ");
         StringBuilder out = new StringBuilder();
-        for (int i = 0; i < tokens.length; i++) {
-            String token = tokens[i];
+        int i = 0;
+        while (i < tokens.length) {
+            String replacement = null;
+            int used = 1;
             int start = 0;
-            int end = token.length();
-            while (start < end && isPunctuation(token.charAt(start))) start++;
-            while (end > start && isPunctuation(token.charAt(end - 1))) end--;
-            String word = token.substring(start, end);
-            String replacement = WORDS.get(word);
-            // "mere ko" and "tere ko" written as two words
-            if (replacement == null && i + 1 < tokens.length && end == token.length()) {
-                String next = tokens[i + 1];
-                int nextEnd = next.length();
-                while (nextEnd > 0 && isPunctuation(next.charAt(nextEnd - 1))) nextEnd--;
-                String pair = word + " " + next.substring(0, nextEnd);
-                String joinedReplacement = null;
-                if (pair.equals("मेरे को") || pair.equals("मेरे कू") || pair.equals("मेरे कु")) joinedReplacement = "मुझे";
-                else if (pair.equals("तेरे को") || pair.equals("तेरे कू") || pair.equals("तेरे कु")) joinedReplacement = "तुझे";
-                else if (pair.equals("میرے کو")) joinedReplacement = "مجھے";
-                else if (pair.equals("تیرے کو")) joinedReplacement = "تجھے";
-                if (joinedReplacement != null) {
-                    if (out.length() > 0) out.append(' ');
-                    out.append(token, 0, start).append(joinedReplacement).append(next.substring(nextEnd));
-                    i++;
-                    continue;
+            int end = 0;
+            // the longest run of words that is in the dictionary wins: "kya scene" before "kya"
+            for (int size = Math.min(MAX_PHRASE_WORDS, tokens.length - i); size >= 1 && replacement == null; size--) {
+                String first = tokens[i];
+                String last = tokens[i + size - 1];
+                start = 0;
+                while (start < first.length() && isPunctuation(first.charAt(start))) start++;
+                end = last.length();
+                while (end > 0 && isPunctuation(last.charAt(end - 1))) end--;
+                if (size == 1 && start >= end) break;
+                StringBuilder phrase = new StringBuilder();
+                boolean broken = false;
+                for (int k = 0; k < size; k++) {
+                    String token = tokens[i + k];
+                    int from = k == 0 ? start : 0;
+                    int to = k == size - 1 ? end : token.length();
+                    if (from > to || token.isEmpty()) { broken = true; break; }
+                    // a phrase does not run across a comma or a full stop
+                    if (k < size - 1 && isPunctuation(token.charAt(token.length() - 1))) { broken = true; break; }
+                    if (k > 0) phrase.append(' ');
+                    phrase.append(token, from, to);
+                }
+                if (broken) continue;
+                replacement = WORDS.get(phrase.toString());
+                if (replacement == null) {
+                    String sound = WordMatcher.key(phrase.toString());
+                    if (sound.length() >= 5) {
+                        replacement = SOUNDS.get(sound);
+                    }
+                }
+                if (replacement != null) {
+                    used = size;
                 }
             }
             if (out.length() > 0) out.append(' ');
             if (replacement == null) {
-                out.append(token);
+                out.append(tokens[i]);
             } else {
-                out.append(token, 0, start).append(replacement).append(token.substring(end));
+                String last = tokens[i + used - 1];
+                out.append(tokens[i], 0, start).append(replacement).append(last.substring(end));
             }
+            i += used;
         }
         return out.toString();
     }
