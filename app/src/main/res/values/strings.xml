@@ -266,7 +266,7 @@
     <string name="guest_steps_hotspot_page">Step 2 of 2\n\nThe other person scans this second code to open the conversation.</string>
     <string name="guest_next">Next</string>
     <!-- Address of the guest relay (see the relay folder). Empty: guests can only join on the local network. -->
-    <string name="guest_relay_url" translatable="false"></string>
+    <string name="guest_relay_url" translatable="false">https://lingoroom-relay.maakaz.workers.dev</string>
     <string name="guest_steps_online">The other person does not need the app, only internet on their phone.\n\nIf they are with you, they scan this code with their camera. If they are somewhere else, tap Send link. Then they hold the microphone button to speak in %1$s, or write.</string>
     <string name="guest_use_wifi">No internet</string>
     <string name="guest_use_internet">Use internet</string>
