@@ -17,12 +17,14 @@
 package nie.translator.rtranslator.voice_translation.guest;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -85,7 +87,7 @@ public final class GuestInviteDialog {
         }
         AlertDialog.Builder builder = new AlertDialog.Builder(activity)
                 .setTitle(R.string.guest_title)
-                .setView(content(activity, steps, address, address))
+                .setView(content(activity, steps, address, address, online))
                 .setPositiveButton(R.string.guest_done, null)
                 .setNegativeButton(R.string.guest_end, (dialog, which) -> {
                     GuestSession.stop();
@@ -120,7 +122,7 @@ public final class GuestInviteDialog {
             String steps = activity.getString(R.string.guest_steps_hotspot_join, name, password);
             new AlertDialog.Builder(activity)
                     .setTitle(R.string.guest_title)
-                    .setView(content(activity, steps, GuestHotspot.joinCode(), null))
+                    .setView(content(activity, steps, GuestHotspot.joinCode(), null, false))
                     .setCancelable(false)
                     .setNegativeButton(R.string.guest_end, (dialog, which) -> {
                         GuestSession.stop();
@@ -144,7 +146,7 @@ public final class GuestInviteDialog {
         }
     }
 
-    private static ScrollView content(Activity activity, String steps, String code, String link) {
+    private static ScrollView content(final Activity activity, String steps, String code, final String link, boolean canSend) {
         int padding = dp(activity, 20);
         LinearLayout content = new LinearLayout(activity);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -173,6 +175,23 @@ public final class GuestInviteDialog {
             linkView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
             linkView.setPadding(0, dp(activity, 8), 0, 0);
             content.addView(linkView);
+        }
+        if (link != null && canSend) {
+            // the other person can be anywhere: the link can be sent with any messaging app
+            Button sendButton = new Button(activity);
+            sendButton.setText(R.string.guest_send_link);
+            sendButton.setOnClickListener(v -> {
+                try {
+                    Intent intent = new Intent(Intent.ACTION_SEND);
+                    intent.setType("text/plain");
+                    intent.putExtra(Intent.EXTRA_TEXT, activity.getString(R.string.guest_send_text, link));
+                    activity.startActivity(Intent.createChooser(intent, activity.getString(R.string.guest_send_link)));
+                } catch (Throwable ignored) {
+                }
+            });
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            params.topMargin = dp(activity, 8);
+            content.addView(sendButton, params);
         }
         ScrollView scroll = new ScrollView(activity);
         scroll.addView(content);

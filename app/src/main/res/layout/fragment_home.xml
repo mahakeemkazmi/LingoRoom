@@ -276,6 +276,17 @@
                 android:textAllCaps="false"
                 android:textColor="?attr/colorPrimary"
                 android:textSize="15sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/homeCallButton"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:fontFamily="sans-serif-medium"
+                android:text="@string/call_mode_button"
+                android:textAllCaps="false"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="15sp" />
         </LinearLayout>
     </ScrollView>
 

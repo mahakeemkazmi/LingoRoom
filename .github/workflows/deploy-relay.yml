@@ -27,6 +27,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           cp ../app/src/main/res/raw/guest_page.html guest_page.html
+          set -o pipefail
           npx --yes wrangler@4 deploy 2>&1 | tee deploy.log
           address=$(grep -o 'https://[A-Za-z0-9.-]*workers.dev' deploy.log | head -1)
           echo "RELAY ADDRESS: $address"

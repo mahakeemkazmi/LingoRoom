@@ -232,6 +232,15 @@ public final class GuestSession {
         return (currentServer != null && currentServer.isGuestListening()) || (currentRelay != null && currentRelay.isGuestListening());
     }
 
+    /**
+     * @return true if a guest who joined over the internet is listening. That guest is somewhere else, so the
+     * mic of this phone only ever hears its own user.
+     */
+    public static boolean isRemoteGuestListening() {
+        RelayClient currentRelay = relay;
+        return currentRelay != null && currentRelay.isGuestListening();
+    }
+
     public static synchronized void publish(String key, boolean hostSpoke, String original, String translated, boolean isFinal) {
         if (server != null) {
             server.publish(key, hostSpoke, original, translated, isFinal);
