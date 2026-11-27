@@ -119,6 +119,8 @@ public class Recorder {
     private boolean pendingStart;
 
 
+    private boolean reduceBackgroundNoise = false;
+
     public Recorder(Global global, boolean useBluetoothHeadset, @NonNull Callback callback, @Nullable ConversationService.BluetoothHeadsetCallback bluetoothHeadsetCallback, VadSilero vad) {
         this.useBluetoothHeadset = useBluetoothHeadset;
         this.global = global;
@@ -146,6 +148,7 @@ public class Recorder {
         }
 
         this.audioManager = (AudioManager) global.getSystemService(Context.AUDIO_SERVICE);
+        this.reduceBackgroundNoise = global.getSharedPreferences("default", Context.MODE_PRIVATE).getBoolean("reduceBackgroundNoise", false);
 
 
         //initialize the TTS status listener (to mute audio when TalkBack speaks)
@@ -458,6 +461,18 @@ public class Recorder {
             AudioRecord audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, CHANNEL, ENCODING, minSizeInBytes);   //the option MIC produce better results than the option VOICE_RECOGNITION
             //audioRecord.setPreferredDevice()
             if (audioRecord.getState() == AudioRecord.STATE_INITIALIZED) {
+                if (reduceBackgroundNoise) {
+                    // optional (settings): the noise filter of the phone, when it has one
+                    try {
+                        if (android.media.audiofx.NoiseSuppressor.isAvailable()) {
+                            android.media.audiofx.NoiseSuppressor suppressor = android.media.audiofx.NoiseSuppressor.create(audioRecord.getAudioSessionId());
+                            if (suppressor != null) {
+                                suppressor.setEnabled(true);
+                            }
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
                 int minReadSize = (minSizeInBytes/4)*2;
                 readSize = (int) (VAD_FRAME_SIZE * Math.ceil((float) minReadSize / VAD_FRAME_SIZE));  //readSize will be the closed multiple of VAD_FRAME_SIZE that is > minReadSize
                 mBuffer = new float[((MAX_SPEECH_LENGTH_MILLIS+1000)/1000)*sampleRate];  //the buffer size will be larger (by one second) than the audio data of duration MAX_SPEECH_LENGTH_MILLIS

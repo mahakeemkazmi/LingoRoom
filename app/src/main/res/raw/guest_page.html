@@ -14,6 +14,9 @@
   #list { flex: 1; overflow-y: auto; padding: 12px; }
   .msg { max-width: 88%; margin: 0 0 10px; padding: 10px 14px; border-radius: 16px; font-size: 19px; line-height: 1.35; word-wrap: break-word; }
   .msg.them { background: #fff; border: 1px solid #E3DCF5; border-bottom-left-radius: 4px; margin-right: auto; }
+  .msg.them { display: flex; align-items: flex-start; gap: 10px; }
+  .msg.them span { flex: 1; }
+  .again { flex: none; width: 38px; height: 38px; border-radius: 19px; background: #F5F3FF; color: #520380; display: flex; align-items: center; justify-content: center; padding: 0; }
   .msg.me { background: #520380; color: #fff; border-bottom-right-radius: 4px; margin-left: auto; }
   .msg.wait { opacity: .6; }
   #hint { margin: 0 12px 8px; padding: 8px 12px; font-size: 15px; color: #171B38; background: #E6F7FF; border-radius: 10px; }
@@ -94,7 +97,20 @@
     }
     // what the host said is shown translated, what the guest said is shown as it was said
     row.className = "msg " + (message.host ? "them" : "me") + (message.final ? "" : " wait");
-    row.textContent = message.host ? message.translated : message.original;
+    if (!row.label) {
+      row.label = document.createElement("span");
+      row.appendChild(row.label);
+    }
+    row.label.textContent = message.host ? message.translated : message.original;
+    if (message.host && message.final && !row.again) {
+      // a small speaker to hear this message again
+      row.again = document.createElement("button");
+      row.again.type = "button";
+      row.again.className = "again";
+      row.again.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02z"/></svg>';
+      row.again.addEventListener("click", function () { hearAgain(message.key); });
+      row.appendChild(row.again);
+    }
     list.scrollTop = list.scrollHeight;
   }
 
@@ -184,6 +200,18 @@
     }
     if (!readAloud) { queue = []; player.pause(); playing = false; }
     reportAloud();
+  }
+
+  function hearAgain(key) {
+    if (!readAloud) setAloud(true);
+    if (online) {
+      if (socket && socket.readyState === 1) socket.send(JSON.stringify({ type: "replay", key: key }));
+    } else {
+      var request = new XMLHttpRequest();
+      request.open("POST", base + "/replay");
+      request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
+      request.send(key);
+    }
   }
 
   function waiting(value) {

@@ -101,6 +101,7 @@ public final class GuestSession {
         }
         final GuestServer created = new GuestServer(readPage(context), LABELS);
         created.setTextListener(GuestSession::deliverText);
+        created.setReplayListener(GuestSession::replay);
         created.setChangeListener(() -> {
             RelayClient current = relay;
             if (current != null && current.isOpen()) {
@@ -162,6 +163,11 @@ public final class GuestSession {
                 @Override
                 public void onGuestText(String text) {
                     deliverText(text);
+                }
+
+                @Override
+                public void onGuestReplay(String key) {
+                    replay(key);
                 }
 
                 @Override
@@ -253,6 +259,27 @@ public final class GuestSession {
     public static synchronized void speak(String phrase) {
         if (voice != null && !speechLanguage.isEmpty()) {
             voice.synthesize("s" + (soundCounter++), phrase, speechLanguage);
+        }
+    }
+
+    /** The guest tapped a message to hear it again. */
+    private static synchronized void replay(String key) {
+        if (server != null && key != null) {
+            String text = server.getTranslated(key);
+            if (text != null) {
+                speak(text);
+            }
+        }
+    }
+
+    /**
+     * The language of the guest has changed: the texts of the page go back to English until they are translated again.
+     */
+    public static synchronized void resetLabels() {
+        if (server != null) {
+            for (int i = 0; i < LABELS.length; i++) {
+                server.setLabel(i, LABELS[i]);
+            }
         }
     }
 

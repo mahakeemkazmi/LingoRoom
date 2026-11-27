@@ -152,6 +152,11 @@ public class WalkieTalkieService extends VoiceTranslationService {
                                 CustomLocale newSecondLanguage = (CustomLocale) message.getData().getSerializable("language");
                                 if (!secondLanguage.equals(newSecondLanguage)) {
                                     secondLanguage = newSecondLanguage;
+                                    if (GuestSession.isActive()) {
+                                        // the guest follows the new language: page texts, voice and the next sentences
+                                        GuestSession.resetLabels();
+                                        guestHost.onGuestSessionStarted();
+                                    }
                                 }
                                 break;
                             case GET_FIRST_LANGUAGE:

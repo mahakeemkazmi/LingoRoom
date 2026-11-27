@@ -64,6 +64,7 @@ public final class GuestServer {
     private ServerSocket serverSocket;
     private volatile boolean running;
     private volatile TextListener textListener;
+    private volatile TextListener replayListener;
     private volatile Runnable changeListener;
     private volatile String speechLanguage = "";
     private volatile long lastGuestContact;
@@ -175,6 +176,17 @@ public final class GuestServer {
     /** @return true if a guest page on the local network is reading the conversation aloud right now */
     public boolean isGuestListening() {
         return System.currentTimeMillis() - lastGuestListening < 4000;
+    }
+
+    /** @param listener receives the key of a message the guest wants to hear again */
+    public void setReplayListener(TextListener listener) {
+        replayListener = listener;
+    }
+
+    /** @return what the guest reads for a message said by the host, or null */
+    public synchronized String getTranslated(String key) {
+        Entry entry = messages.get(key);
+        return entry != null && entry.host ? entry.translated : null;
     }
 
     public void setTextListener(TextListener listener) {
@@ -363,6 +375,19 @@ public final class GuestServer {
                     output.write(wav);
                     output.flush();
                 }
+            } else if (method.equals("POST") && target.equals(base + "/replay")) {
+                byte[] body = new byte[Math.max(0, Math.min(contentLength, 64))];
+                int offset = 0;
+                while (offset < body.length) {
+                    int read = input.read(body, offset, body.length - offset);
+                    if (read < 0) break;
+                    offset += read;
+                }
+                TextListener listener = replayListener;
+                if (listener != null && offset > 0) {
+                    listener.onGuestText(new String(body, 0, offset, StandardCharsets.UTF_8).trim());
+                }
+                respond(output, "200 OK", "text/plain; charset=utf-8", "ok");
             } else if (method.equals("POST") && target.equals(base + "/say")) {
                 if (contentLength < 0 || contentLength > MAX_BODY_BYTES) {
                     respond(output, "413 Payload Too Large", "text/plain; charset=utf-8", "too long");

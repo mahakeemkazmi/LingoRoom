@@ -41,6 +41,9 @@ final class RelayClient {
 
         void onGuestText(String text);
 
+        /** @param key the message the guest wants to hear again */
+        void onGuestReplay(String key);
+
         /** @param samples what the guest said, mono, 16 kHz */
         void onGuestAudio(float[] samples);
     }
@@ -83,6 +86,8 @@ final class RelayClient {
                         listener.onGuestJoined();
                     } else if (type.equals("aloud")) {
                         lastGuestListening = json.optBoolean("on") ? System.currentTimeMillis() : 0;
+                    } else if (type.equals("replay")) {
+                        listener.onGuestReplay(json.optString("key"));
                     } else if (type.equals("say")) {
                         String said = json.optString("text").replaceAll("\\s+", " ").trim();
                         if (said.length() > 500) {
